@@ -1,0 +1,77 @@
+name: Linux release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Check syntax
+        run: npm run check
+
+      - name: Run unit and contract tests
+        run: npm test
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Configure Electron sandbox helper
+        run: sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+
+      - name: Run Electron UI smoke test
+        run: npm run test:ui
+
+      - name: Build AppImage and DEB
+        run: npm run dist:linux
+
+      - name: Generate SPDX SBOM
+        run: npm sbom --sbom-format spdx > "dist/chatdesk-linux-${GITHUB_REF_NAME}.spdx.json"
+
+      - name: Generate SHA-256 checksums
+        run: cd dist && sha256sum *.AppImage *.deb *.spdx.json > SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.AppImage
+            dist/*.deb
+
+      - name: Attest release SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.AppImage
+            dist/*.deb
+          sbom-path: dist/chatdesk-linux-${{ github.ref_name }}.spdx.json
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.spdx.json
+            dist/SHA256SUMS
+          generate_release_notes: true

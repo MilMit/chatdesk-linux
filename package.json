@@ -1,0 +1,161 @@
+{
+  "name": "chatdesk-linux",
+  "version": "0.5.0",
+  "description": "ChatDesk Linux is an unofficial, security-hardened ChatGPT desktop app for Linux with quick capture, multi-profile windows, compact mode, workspaces, prompt library, deep links, local clipboard history, diagnostics, and signed release provenance.",
+  "type": "module",
+  "main": "src/main/index.js",
+  "author": "milmit",
+  "license": "MIT",
+  "homepage": "https://github.com/milmit/chatdesk-linux#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/milmit/chatdesk-linux.git"
+  },
+  "bugs": {
+    "url": "https://github.com/milmit/chatdesk-linux/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node scripts/check-syntax.js",
+    "dist": "npm run dist:linux",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:snap": "electron-builder --linux snap",
+    "test:ui": "xvfb-run -a electron . --ui-smoke-test",
+    "sbom": "npm sbom --sbom-format spdx > dist/chatdesk-linux-sbom.spdx.json"
+  },
+  "devDependencies": {
+    "electron": "43.2.0",
+    "electron-builder": "26.15.5"
+  },
+  "build": {
+    "appId": "io.github.milmit.chatdesk",
+    "productName": "ChatDesk Linux",
+    "artifactName": "chatdesk-linux-${version}-${arch}.${ext}",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "scripts/**/*",
+      "package.json",
+      "LICENSE",
+      "NOTICE"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network",
+      "icon": "assets/icon.png",
+      "executableName": "chatdesk-linux",
+      "desktop": {
+        "entry": {
+          "Name": "ChatDesk Linux",
+          "Comment": "Unofficial desktop wrapper for ChatGPT on Linux",
+          "Categories": "Network;Utility;",
+          "Keywords": "ChatGPT;OpenAI;AI;Assistant;Linux;Desktop;",
+          "StartupWMClass": "io.github.milmit.chatdesk",
+          "MimeType": "x-scheme-handler/chatdesk;text/plain;text/markdown;application/pdf;application/json;image/png;image/jpeg;image/webp;",
+          "Exec": "chatdesk-linux %U"
+        },
+        "desktopActions": {
+          "NewChat": {
+            "Name": "New Chat",
+            "Exec": "chatdesk-linux --new-chat"
+          },
+          "QuickChat": {
+            "Name": "Quick Chat",
+            "Exec": "chatdesk-linux --quick-chat"
+          },
+          "Downloads": {
+            "Name": "Open Downloads",
+            "Exec": "chatdesk-linux --downloads"
+          },
+          "Settings": {
+            "Name": "Open Settings",
+            "Exec": "chatdesk-linux --settings"
+          },
+          "Diagnostics": {
+            "Name": "Open Diagnostics",
+            "Exec": "chatdesk-linux --diagnostics"
+          },
+          "SafeMode": {
+            "Name": "Start in Safe Mode",
+            "Exec": "chatdesk-linux --safe-mode"
+          },
+          "CommandPalette": {
+            "Name": "Command Palette",
+            "Exec": "chatdesk-linux --command-palette"
+          },
+          "QuickCapture": {
+            "Name": "Quick Capture",
+            "Exec": "chatdesk-linux --quick-chat"
+          },
+          "Prompts": {
+            "Name": "Prompt Library",
+            "Exec": "chatdesk-linux --prompts"
+          },
+          "Workspaces": {
+            "Name": "Workspaces",
+            "Exec": "chatdesk-linux --workspaces"
+          },
+          "Health": {
+            "Name": "Installation Health",
+            "Exec": "chatdesk-linux --health"
+          }
+        }
+      },
+      "syncDesktopName": true
+    },
+    "snap": {
+      "confinement": "strict",
+      "grade": "stable",
+      "plugs": [
+        "desktop",
+        "desktop-legacy",
+        "home",
+        "network",
+        "opengl",
+        "wayland",
+        "x11",
+        "audio-record",
+        "camera"
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "txt",
+          "md",
+          "log",
+          "json",
+          "pdf",
+          "png",
+          "jpg",
+          "jpeg",
+          "webp"
+        ],
+        "name": "ChatDesk Share File",
+        "description": "Share a file with ChatDesk Linux",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "keywords": [
+    "chatgpt",
+    "openai",
+    "linux",
+    "desktop",
+    "electron",
+    "ai",
+    "assistant",
+    "unofficial"
+  ]
+}

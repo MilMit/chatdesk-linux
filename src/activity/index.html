@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+  <title>ChatDesk Activity</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="activity" class="activity-shell" aria-live="polite">
+    <section id="connection" class="connection-card hidden"></section>
+    <section id="downloads" class="download-stack"></section>
+    <button id="moreDownloads" class="more-downloads hidden" type="button"></button>
+    <section id="toast" class="toast-card hidden"></section>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

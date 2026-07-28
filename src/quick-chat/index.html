@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <link rel="stylesheet" href="styles.css">
+  <title>Quick Capture</title>
+</head>
+<body>
+  <header>
+    <div class="mark">M</div>
+    <div><h1 id="title">Quick Capture</h1><p id="subtitle">Prepare text locally, then paste it into ChatGPT.</p></div>
+    <button class="icon" id="closeButton" type="button" aria-label="Close">×</button>
+  </header>
+  <main>
+    <div class="capture-tools">
+      <button id="selectionButton" type="button">Use Selection</button>
+      <button id="clipboardButton" type="button">Use Clipboard</button>
+      <select id="promptSelect"><option value="">No prompt template</option></select>
+    </div>
+    <textarea id="prompt" spellcheck="true" placeholder="Ask ChatDesk…"></textarea>
+    <div class="footer-row">
+      <label><span id="profileLabel">Profile</span><select id="profileSelect"></select></label>
+      <label><span id="modeLabel">Destination</span><select id="destinationSelect"><option value="new">New chat</option><option value="continue">Current chat</option><option value="window">New profile window</option></select></label>
+      <button id="submitButton" class="primary" type="button">Copy & Open</button>
+    </div>
+    <p id="helpText">The prompt is copied locally. Press Ctrl+V in ChatGPT to paste it.</p>
+    <p id="errorText" class="error hidden" role="alert"></p>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>

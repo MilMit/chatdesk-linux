@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#10131a"/><stop offset="1" stop-color="#202534"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#4f8cff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-opacity=".4"/></filter>
+  </defs>
+  <rect width="1440" height="900" fill="#080a0e"/>
+  <rect x="58" y="36" width="1324" height="824" rx="18" fill="url(#bg)" stroke="#343b4b" filter="url(#shadow)"/>
+  <rect x="58" y="36" width="1324" height="46" rx="18" fill="#282d38"/>
+  <circle cx="84" cy="59" r="7" fill="#ff6b6b"/><circle cx="106" cy="59" r="7" fill="#ffd166"/><circle cx="128" cy="59" r="7" fill="#4ade80"/>
+  <text x="720" y="65" fill="#e9edf7" font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">👤 ChatDesk Linux — Personal</text>
+  <rect x="58" y="82" width="1324" height="39" fill="#171a21"/>
+  <text x="82" y="107" fill="#cbd2e1" font-family="system-ui,sans-serif" font-size="14">File</text><text x="125" y="107" fill="#cbd2e1" font-family="system-ui,sans-serif" font-size="14">View</text><text x="174" y="107" fill="#cbd2e1" font-family="system-ui,sans-serif" font-size="14">Tools</text><text x="226" y="107" fill="#cbd2e1" font-family="system-ui,sans-serif" font-size="14">Help</text>
+  <rect x="58" y="121" width="1324" height="739" fill="#f7f7f8"/>
+  <rect x="58" y="121" width="260" height="739" fill="#ededee"/>
+  <text x="84" y="166" fill="#222" font-family="system-ui,sans-serif" font-size="17" font-weight="700">ChatGPT</text>
+  <rect x="80" y="191" width="216" height="42" rx="9" fill="#fff"/><text x="98" y="217" fill="#444" font-family="system-ui,sans-serif" font-size="14">＋ New chat</text>
+  <text x="350" y="168" fill="#16181d" font-family="system-ui,sans-serif" font-size="20" font-weight="700">How can I help you today?</text>
+  <rect x="430" y="728" width="580" height="72" rx="18" fill="#fff" stroke="#d1d5db"/><text x="460" y="772" fill="#858a94" font-family="system-ui,sans-serif" font-size="15">Message ChatGPT…</text>
+  <rect x="368" y="190" width="720" height="485" rx="18" fill="#171a21" stroke="#3b4252" filter="url(#shadow)"/>
+  <rect x="368" y="190" width="720" height="68" rx="18" fill="#1d212a"/>
+  <text x="398" y="232" fill="#9db9ff" font-family="system-ui,sans-serif" font-size="25">⌘</text>
+  <text x="438" y="233" fill="#f5f7fb" font-family="system-ui,sans-serif" font-size="18">Command Palette</text>
+  <rect x="390" y="278" width="676" height="54" rx="12" fill="#0f1218" stroke="#4f8cff"/>
+  <text x="415" y="312" fill="#9aa3b2" font-family="system-ui,sans-serif" font-size="16">Type a command…</text><text x="1005" y="311" fill="#737b8b" font-family="system-ui,sans-serif" font-size="12">Esc</text>
+  <g font-family="system-ui,sans-serif" font-size="15">
+    <rect x="390" y="348" width="676" height="57" rx="11" fill="#293349"/><text x="415" y="383" fill="#8bb1ff">＋</text><text x="454" y="383" fill="#f3f5fa">New Chat</text><text x="985" y="383" fill="#9aa3b2" font-size="12">Ctrl+N</text>
+    <rect x="390" y="413" width="676" height="57" rx="11" fill="#20242d"/><text x="415" y="448" fill="#a88bff">👤</text><text x="454" y="448" fill="#f3f5fa">Profiles: Personal</text>
+    <rect x="390" y="478" width="676" height="57" rx="11" fill="#20242d"/><text x="415" y="513" fill="#60d8ba">⚙</text><text x="454" y="513" fill="#f3f5fa">Settings</text>
+    <rect x="390" y="543" width="676" height="57" rx="11" fill="#20242d"/><text x="415" y="578" fill="#f0b45c">↓</text><text x="454" y="578" fill="#f3f5fa">Downloads</text><text x="985" y="578" fill="#9aa3b2" font-size="12">Ctrl+J</text>
+  </g>
+  <rect x="1000" y="690" width="344" height="128" rx="17" fill="#1b2029" stroke="#40495c" filter="url(#shadow)"/>
+  <rect x="1018" y="708" width="34" height="34" rx="10" fill="#233457"/><text x="1035" y="733" text-anchor="middle" fill="#76a2ff" font-family="system-ui" font-size="20">↓</text>
+  <text x="1066" y="727" fill="#f4f6fb" font-family="system-ui,sans-serif" font-size="13" font-weight="700">report.pdf</text><text x="1313" y="727" fill="#aab1bf" font-family="system-ui,sans-serif" font-size="12">72%</text>
+  <text x="1066" y="746" fill="#8f98a8" font-family="system-ui,sans-serif" font-size="10">3.8 MB / 5.2 MB · 1.4 MB/s</text>
+  <rect x="1018" y="762" width="308" height="6" rx="3" fill="#343a46"/><rect x="1018" y="762" width="222" height="6" rx="3" fill="url(#accent)"/>
+  <rect x="1182" y="784" width="66" height="23" rx="7" fill="#2b303b"/><text x="1215" y="800" text-anchor="middle" fill="#d9deea" font-family="system-ui" font-size="10">Pause</text><rect x="1256" y="784" width="70" height="23" rx="7" fill="#3a252d"/><text x="1291" y="800" text-anchor="middle" fill="#ffb3bf" font-family="system-ui" font-size="10">Cancel</text>
+  <text x="72" y="887" fill="#6f7787" font-family="system-ui,sans-serif" font-size="11">Interface preview — remote ChatGPT page is shown for context. ChatDesk is unofficial and not affiliated with OpenAI.</text>
+</svg>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+  <title>ChatDesk Linux</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="profileStrip" aria-hidden="true"></div>
+  <main id="root">
+    <section id="splash" class="screen">
+      <div class="logo-stage"><div class="orbit one"></div><div class="orbit two"></div><img src="../../assets/icon.png" alt="ChatDesk Linux"></div>
+      <h1 data-i18n="splash.title">ChatDesk Linux</h1><p data-i18n="splash.text">Preparing a secure ChatGPT session…</p>
+      <div class="dots"><i></i><i></i><i></i></div>
+    </section>
+
+    <section id="loading" class="screen hidden">
+      <div class="spinner"></div><h1 data-i18n="loading.title">Connecting to ChatGPT</h1><p data-i18n="loading.text">This should only take a few seconds.</p>
+    </section>
+    <section id="switching" class="screen hidden">
+      <div id="switchingBadge" class="switching-badge">●</div><h1 id="switchingTitle">Switching profile…</h1><p>Preparing an isolated ChatGPT session.</p>
+    </section>
+
+    <section id="offline" class="screen hidden">
+      <div class="symbol">☁</div><h1 data-i18n="offline.title">Unable to reach ChatGPT</h1><p id="offlineMessage"></p>
+      <div class="actions"><button class="primary" id="retryButton" data-i18n="common.retry">Try Again</button><button id="offlineDiagnostics" data-i18n="offline.diagnostics">Open Diagnostics</button></div>
+    </section>
+
+    <section id="panel" class="panel hidden">
+      <div class="panel-card">
+        <header class="panel-header">
+          <div><p class="eyebrow">CHATDESK LINUX</p><h1 id="panelTitle">Settings</h1><p id="panelSubtitle"></p></div>
+          <button class="icon" id="panelCloseButton" aria-label="Close">×</button>
+        </header>
+
+        <div id="settingsContent" class="content hidden">
+          <section class="group"><h2 data-i18n="settings.general">General</h2>
+            <label class="row"><span><b data-i18n="settings.language">Language</b><small data-i18n="settings.languageHelp">Change the local ChatDesk interface language.</small></span><select id="languageSelect"><option value="system">System</option><option value="en">English</option><option value="fa">فارسی</option></select></label>
+            <label class="row"><span><b data-i18n="settings.theme">Theme</b><small data-i18n="settings.themeHelp">Use the Linux theme or force light/dark.</small></span><select id="themeSelect"><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+            <label class="row"><span><b data-i18n="settings.startup">Launch at startup</b><small data-i18n="settings.startupHelp">Start after Linux login.</small></span><input type="checkbox" id="launchAtStartup"></label>
+            <label class="row"><span><b data-i18n="settings.tray">Minimize to tray</b><small data-i18n="settings.trayHelp">Keep running after the window closes.</small></span><input type="checkbox" id="minimizeToTray"></label>
+            <label class="row"><span><b data-i18n="settings.top">Always on top</b><small data-i18n="settings.topHelp">Keep ChatDesk above other windows.</small></span><input type="checkbox" id="alwaysOnTop"></label>
+            <label class="row"><span><b data-i18n="settings.animations">Animations</b><small data-i18n="settings.animationsHelp">Disable for a faster, calmer interface.</small></span><input type="checkbox" id="animations"></label>
+            <label class="row"><span><b data-i18n="settings.menu">Auto-hide menu bar</b><small data-i18n="settings.menuHelp">Press Alt to reveal the menu.</small></span><input type="checkbox" id="autoHideMenuBar"></label>
+          </section>
+
+          <section class="group"><h2 data-i18n="settings.activity">Activity popups</h2>
+            <label class="row"><span><b data-i18n="settings.activityCenter">Floating activity center</b><small data-i18n="settings.activityCenterHelp">Show animated download progress and app messages over ChatGPT.</small></span><input type="checkbox" id="activityPopups"></label>
+            <label class="row"><span><b data-i18n="settings.connection">Connection status</b><small data-i18n="settings.connectionHelp">Briefly show connecting and connected states.</small></span><input type="checkbox" id="connectionActivity"></label>
+            <label class="row"><span><b data-i18n="settings.autoHideDownloads">Auto-hide finished downloads</b><small data-i18n="settings.autoHideDownloadsHelp">Keep finished cards visible briefly, then dismiss them.</small></span><input type="checkbox" id="autoHideCompletedDownloads"></label>
+          </section>
+
+          <section class="group"><h2 data-i18n="settings.chatgpt">ChatGPT</h2>
+            <label class="row"><span><b data-i18n="settings.hardware">Hardware acceleration</b><small data-i18n="settings.hardwareHelp">A restart is required after changing this.</small></span><input type="checkbox" id="hardwareAcceleration"></label>
+            <label class="row"><span><b data-i18n="settings.spellcheck">Spell checking</b><small data-i18n="settings.spellcheckHelp">Use Chromium's spell checker.</small></span><input type="checkbox" id="spellcheck"></label>
+            <label class="row"><span><b data-i18n="settings.notifications">Notifications</b><small data-i18n="settings.notificationsHelp">Show download notifications.</small></span><input type="checkbox" id="notifications"></label>
+            <label class="row"><span><b data-i18n="settings.external">External links</b><small data-i18n="settings.externalHelp">Open safe HTTPS links in your browser.</small></span><input type="checkbox" id="externalLinks"></label>
+            <label class="row"><span><b data-i18n="settings.zoom">Zoom</b><small id="zoomValue">100%</small></span><input type="range" id="zoomFactor" min="0.75" max="1.5" step="0.05"></label>
+          </section>
+
+          <section class="group" id="profilesGroup"><h2 data-i18n="settings.profiles">Profiles</h2><p class="hint" data-i18n="settings.profilesHelp">Each profile has separate login cookies and ChatGPT sessions.</p>
+            <div class="profile-controls"><select id="profileSelect"></select><button id="switchProfileButton" data-i18n="settings.switch">Switch</button><button id="openProfileWindowButton">Open Window</button><button id="removeProfileButton" class="danger" data-i18n="common.delete">Delete</button></div>
+            <div class="profile-controls"><input id="newProfileName" maxlength="40" data-i18n-placeholder="settings.newProfile" placeholder="New profile name"><button id="addProfileButton" data-i18n="settings.addProfile">Add Profile</button></div>
+            <h3 data-i18n="settings.profileAppearance">Profile appearance</h3>
+            <div class="profile-controls"><select id="profileColor"><option value="blue">Blue</option><option value="violet">Violet</option><option value="emerald">Emerald</option><option value="amber">Amber</option><option value="rose">Rose</option><option value="cyan">Cyan</option></select><select id="profileIcon"><option value="person">Person</option><option value="briefcase">Briefcase</option><option value="flask">Flask</option><option value="star">Star</option><option value="code">Code</option><option value="shield">Shield</option></select><button id="saveProfileAppearance" data-i18n="settings.saveAppearance">Save Appearance</button></div>
+          </section>
+
+          <section class="group"><h2 data-i18n="settings.shortcuts">Shortcuts and downloads</h2>
+            <label class="row vertical"><span><b data-i18n="settings.mainShortcut">Main shortcut</b><small data-i18n="settings.mainShortcutHelp">Show or hide ChatDesk.</small></span><input type="text" id="mainShortcut"></label>
+            <label class="row vertical"><span><b data-i18n="settings.quickShortcut">Quick Chat shortcut</b><small data-i18n="settings.quickShortcutHelp">Open the floating prompt box.</small></span><input type="text" id="quickChatShortcut"></label>
+            <label class="row vertical"><span><b data-i18n="settings.commandShortcut">Command Palette shortcut</b><small data-i18n="settings.commandShortcutHelp">Search and run ChatDesk actions from anywhere.</small></span><input type="text" id="commandPaletteShortcut"></label>
+            <div class="row"><span><b data-i18n="settings.downloadFolder">Download folder</b><small id="downloadPathText">System default</small></span><button id="chooseDownloadFolder" data-i18n="settings.choose">Choose</button></div>
+          </section>
+
+          <section class="group"><h2 data-i18n="settings.update">Updates</h2>
+            <label class="row"><span><b data-i18n="settings.autoUpdate">Check automatically once a day</b><small data-i18n="settings.autoUpdateHelp">Only checks GitHub Releases and never installs without asking.</small></span><input type="checkbox" id="autoCheckUpdates"></label>
+          </section>
+
+          <section class="group"><h2>Power tools and privacy</h2>
+            <label class="row"><span><b>Private capture history</b><small>Opt-in. Stores only captures you explicitly submit to ChatDesk; likely secrets are rejected.</small></span><input type="checkbox" id="clipboardHistoryEnabled"></label>
+            <label class="row"><span><b>Maximum capture items</b><small>Stored with mode 0600 and protected by the Linux keyring when a secure backend is available.</small></span><input type="number" id="clipboardHistoryLimit" min="1" max="50" step="1"></label>
+            <label class="row"><span><b>Compact width</b><small>Width used by Compact Mode.</small></span><input type="number" id="compactWidth" min="380" max="720" step="10"></label>
+            <label class="row"><span><b>Compact side</b><small>Dock Compact Mode to the left or right.</small></span><select id="compactSide"><option value="right">Right</option><option value="left">Left</option></select></label>
+          </section>
+
+          <section class="group"><h2 data-i18n="settings.privacy">Privacy and recovery</h2>
+            <div class="button-grid"><button id="clearCacheButton" data-i18n="settings.clearCache">Clear Cache</button><button id="clearSessionButton" data-i18n="settings.signOut">Sign Out Current Profile</button><button id="exportSettingsButton" data-i18n="settings.export">Export Settings</button><button id="importSettingsButton" data-i18n="settings.import">Import Settings</button><button id="factoryResetButton" class="danger" data-i18n="settings.reset">Factory Reset</button></div>
+            <p id="restartNotice" class="notice hidden" data-i18n="settings.restartNotice">Restart ChatDesk for the hardware acceleration change to take effect.</p>
+            <p id="safeModeNotice" class="notice hidden" data-i18n="settings.safeModeNotice">Safe Mode is active.</p>
+          </section>
+        </div>
+
+        <div id="downloadsContent" class="content hidden">
+          <div class="section-toolbar"><p data-i18n="downloads.local">Download history is stored locally.</p><button id="clearDownloadHistory" data-i18n="downloads.clear">Clear History</button></div>
+          <div id="downloadList" class="download-list"></div>
+        </div>
+
+        <div id="diagnosticsContent" class="content hidden">
+          <div id="diagnosticsGrid" class="diagnostics-grid"></div>
+          <div class="button-grid"><button id="copyDiagnostics" data-i18n="diagnostics.copy">Copy Diagnostics</button><button id="testClipboard" data-i18n="diagnostics.clipboardTest">Test Clipboard</button><button id="openLogs" data-i18n="diagnostics.logs">Open Log Folder</button><button id="diagClearCache" data-i18n="settings.clearCache">Clear Cache</button><button id="diagResetSession" data-i18n="diagnostics.resetSession">Reset Session</button><button id="restartApp" data-i18n="diagnostics.restart">Restart App</button><button id="safeModeButton" data-i18n="diagnostics.safeMode">Start in Safe Mode</button></div>
+          <p class="privacy-note">Diagnostics never include your prompts, responses, passwords or cookies.</p>
+        </div>
+
+        <div id="aboutContent" class="content hidden">
+          <div class="about"><img src="../../assets/icon.png" alt=""><div><h2>ChatDesk Linux</h2><p id="versionText"></p></div></div>
+          <p>Unofficial desktop client for ChatGPT. Developed by Milmit. Not affiliated with or endorsed by OpenAI.</p>
+          <div class="version-grid"><div><span>Electron</span><b id="electronVersion">—</b></div><div><span>Chromium</span><b id="chromiumVersion">—</b></div><div><span>Node.js</span><b id="nodeVersion">—</b></div></div>
+          <button class="primary" id="checkUpdateButton" data-i18n="about.check">Check for Updates</button><button id="openGitHubButton" data-i18n="about.github">Open GitHub</button><div id="updateResult" class="update-result"></div>
+          <p class="privacy-note" data-i18n="about.privacy">ChatDesk does not upload crash reports, diagnostics, cookies, or conversation content.</p>
+        </div>
+
+        <div id="workspacesContent" class="content hidden">
+          <div class="power-layout"><aside><div class="section-toolbar"><b>Workspaces</b><button id="newWorkspaceButton">New</button></div><div id="workspaceList" class="power-list"></div></aside>
+          <section class="power-editor"><input id="workspaceId" type="hidden"><label>Name<input id="workspaceName" maxlength="60"></label><label>Profile<select id="workspaceProfile"></select></label><div class="field-grid"><label>Width<input id="workspaceWidth" type="number" min="800" max="3840"></label><label>Height<input id="workspaceHeight" type="number" min="600" max="2160"></label><label>Zoom<input id="workspaceZoom" type="number" min="0.75" max="1.5" step="0.05"></label><label>Theme<select id="workspaceTheme"><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label><label>Start<select id="workspaceStart"><option value="current">Current chat</option><option value="new">New chat</option></select></label><label>Shortcut<input id="workspaceShortcut" placeholder="Ctrl+Alt+C"></label></div><label class="inline-check"><input id="workspaceCompact" type="checkbox"> Compact Mode</label><label class="inline-check"><input id="workspaceAlwaysOnTop" type="checkbox"> Always on top</label><div class="actions"><button class="primary" id="saveWorkspaceButton">Save</button><button id="applyWorkspaceButton">Apply</button><button class="danger" id="deleteWorkspaceButton">Delete</button></div></section></div>
+        </div>
+
+        <div id="promptsContent" class="content hidden">
+          <div class="power-layout"><aside><div class="section-toolbar"><b>Prompt Library</b><button id="newPromptButton">New</button></div><input id="promptFilter" placeholder="Filter prompts…"><div id="promptList" class="power-list"></div></aside>
+          <section class="power-editor"><input id="promptId" type="hidden"><label>Title<input id="promptTitle" maxlength="80"></label><label>Category<input id="promptCategory" maxlength="40"></label><label>Template<textarea id="promptTemplate" rows="10" placeholder="Use {clipboard}, {selection}, {date}, and {profile}"></textarea></label><label>Shortcut<input id="promptShortcut" placeholder="Optional global shortcut"></label><label class="inline-check"><input id="promptFavorite" type="checkbox"> Favorite</label><div class="actions"><button class="primary" id="savePromptButton">Save</button><button id="copyPromptButton">Copy Expanded</button><button class="danger" id="deletePromptButton">Delete</button></div></section></div>
+        </div>
+
+        <div id="capturesContent" class="content hidden">
+          <div class="section-toolbar"><div><b>Recent Captures</b><p>Opt-in local history. Password-like and token-like values are not saved.</p><small id="captureProtectionStatus"></small></div><button class="danger" id="clearCapturesButton">Clear</button></div><div id="captureList" class="capture-list"></div>
+        </div>
+
+        <div id="logsContent" class="content hidden">
+          <div class="section-toolbar"><select id="logLevel"><option value="all">All levels</option><option value="error">Errors</option><option value="warn">Warnings</option><option value="info">Info</option></select><div><button id="refreshLogsButton">Refresh</button><button id="copyLogsButton">Copy</button><button id="exportLogsButton">Export</button><button class="danger" id="clearLogsButton">Clear</button></div></div><pre id="logViewer" class="log-viewer"></pre>
+        </div>
+
+        <div id="healthContent" class="content hidden">
+          <div class="section-toolbar"><p>Checks the installation without reading conversations or cookies.</p><button class="primary" id="runHealthButton">Run Checks</button></div><div id="healthList" class="health-list"></div>
+        </div>
+
+        <div id="shareContent" class="content hidden">
+          <div id="shareDropZone" class="drop-zone"><b>Drop files here</b><span>Files stay on your computer. ChatDesk stages them and helps you open ChatGPT; it does not upload automatically.</span><input id="shareFileInput" type="file" multiple></div><div class="section-toolbar"><div><button id="copySharePathsButton">Copy Paths</button><button id="openShareChatButton" class="primary">Open ChatGPT</button></div><button class="danger" id="clearShareButton">Clear Queue</button></div><div id="shareList" class="share-list"></div>
+        </div>
+
+        <div id="reportContent" class="content hidden">
+          <p class="privacy-note">The report excludes prompts, responses, cookies and passwords. Review it before publishing.</p><textarea id="issueReportText" class="report-text" spellcheck="false"></textarea><div class="button-grid"><button class="primary" id="copyIssueButton">Copy Report</button><button id="saveIssueButton">Save Markdown</button><button id="openIssueButton">Open GitHub Issue</button></div>
+        </div>
+
+        <div id="crashContent" class="content hidden">
+          <div class="crash-icon">!</div><h2>ChatDesk encountered a problem</h2><p id="crashMessage"></p>
+          <div class="button-grid"><button class="primary" id="reloadAfterCrash">Reload ChatGPT</button><button id="restartAfterCrash">Restart App</button><button id="crashDiagnostics">Open Diagnostics</button></div>
+        </div>
+
+        <div id="commandContent" class="content hidden">
+          <input id="commandSearch" class="command-search" autocomplete="off" data-i18n-placeholder="command.placeholder" placeholder="Type a command…">
+          <div id="commandList" class="command-list"></div>
+          <p id="commandEmpty" class="empty hidden" data-i18n="command.empty">No matching commands.</p>
+        </div>
+
+        <div id="onboardingContent" class="content hidden">
+          <div class="onboarding-grid">
+            <article><span>🌐</span><h3 data-i18n="onboarding.languageTitle">Choose your language</h3><p data-i18n="onboarding.languageText">You can change it later in Settings.</p><select id="onboardingLanguage"><option value="system">System</option><option value="en">English</option><option value="fa">فارسی</option></select></article>
+            <article><span>👤</span><h3 data-i18n="onboarding.profilesTitle">Separate profiles</h3><p data-i18n="onboarding.profilesText">Keep personal, work, and testing logins isolated.</p></article>
+            <article><span>⌨</span><h3 data-i18n="onboarding.shortcutsTitle">Fast access</h3><p data-i18n="onboarding.shortcutsText">Use the tray, global shortcuts, and Command Palette.</p></article>
+            <article><span>🔒</span><h3 data-i18n="onboarding.privacyTitle">Local-first controls</h3><p data-i18n="onboarding.privacyText">Diagnostics and crash records stay on this device.</p></article>
+          </div>
+          <button class="primary onboarding-start" id="completeOnboarding" data-i18n="onboarding.start">Start ChatDesk</button>
+        </div>
+
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>

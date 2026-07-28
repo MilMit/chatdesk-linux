@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible ChatDesk Linux problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste cookies, tokens, account details, or conversation content.
+  - type: input
+    id: version
+    attributes:
+      label: ChatDesk version
+      placeholder: 0.5.0
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options: [AppImage, DEB, source, other]
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Linux desktop and display protocol
+      placeholder: Ubuntu 26.04, GNOME, Wayland
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized Diagnostics output
+      description: Use Tools → Diagnostics → Copy Diagnostics. Review it before posting.
