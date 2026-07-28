@@ -4,15 +4,15 @@
   "description": "ChatDesk Linux is an unofficial, security-hardened ChatGPT desktop app for Linux with quick capture, multi-profile windows, compact mode, workspaces, prompt library, deep links, local clipboard history, diagnostics, and signed release provenance.",
   "type": "module",
   "main": "src/main/index.js",
-  "author": "milmit",
+  "author": "MilMit",
   "license": "MIT",
-  "homepage": "https://github.com/milmit/chatdesk-linux#readme",
+  "homepage": "https://github.com/MilMit/chatdesk-linux#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/milmit/chatdesk-linux.git"
+    "url": "git+https://github.com/MilMit/chatdesk-linux.git"
   },
   "bugs": {
-    "url": "https://github.com/milmit/chatdesk-linux/issues"
+    "url": "https://github.com/MilMit/chatdesk-linux/issues"
   },
   "engines": {
     "node": ">=24"
@@ -62,8 +62,7 @@
           "Categories": "Network;Utility;",
           "Keywords": "ChatGPT;OpenAI;AI;Assistant;Linux;Desktop;",
           "StartupWMClass": "io.github.milmit.chatdesk",
-          "MimeType": "x-scheme-handler/chatdesk;text/plain;text/markdown;application/pdf;application/json;image/png;image/jpeg;image/webp;",
-          "Exec": "chatdesk-linux %U"
+          "MimeType": "x-scheme-handler/chatdesk;text/plain;text/markdown;application/pdf;application/json;image/png;image/jpeg;image/webp;"
         },
         "desktopActions": {
           "NewChat": {
@@ -157,5 +156,6 @@
     "ai",
     "assistant",
     "unofficial"
-  ]
+  ],
+  "desktopName": "io.github.milmit.chatdesk.desktop"
 }
