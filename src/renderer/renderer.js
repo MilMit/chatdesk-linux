@@ -567,7 +567,7 @@ $('diagResetSession').onclick = async () => {
 $('restartApp').onclick = () => api.send('app:restart', settings?.safeMode === true);
 $('safeModeButton').onclick = () => api.send('app:restart', settings?.safeMode !== true);
 $('checkUpdateButton').onclick = checkUpdates;
-$('openGitHubButton').onclick = () => safeInvoke('external:open', 'https://github.com/milmit/chatdesk-linux');
+$('openGitHubButton').onclick = () => safeInvoke('external:open', 'https://github.com/MilMit/chatdesk-linux');
 $('reloadAfterCrash').onclick = () => api.send('app:retry');
 $('restartAfterCrash').onclick = () => api.send('app:restart', settings?.safeMode === true);
 $('crashDiagnostics').onclick = () => showPanel('diagnostics');

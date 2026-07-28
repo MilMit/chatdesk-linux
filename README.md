@@ -8,7 +8,7 @@ ChatDesk Linux opens `https://chatgpt.com` in isolated Electron sessions and add
 
 ![ChatDesk Linux interface preview](docs/screenshots/chatdesk-overview.svg)
 
-## Highlights in 0.5.0
+## Highlights in 0.5.1
 
 - **Quick Capture** from the Linux clipboard or X11/Wayland selection with `Ctrl+Shift+Space`
 - **Independent profile windows** with separate persistent sessions, titles, colors, and saved bounds
@@ -166,7 +166,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 Verify GitHub provenance after publishing:
 
 ```bash
-gh attestation verify ./chatdesk-linux-0.5.0-x86_64.AppImage -R milmit/chatdesk-linux
+gh attestation verify ./chatdesk-linux-0.5.1-x86_64.AppImage -R MilMit/chatdesk-linux
 ```
 
 A committed npm lockfile is still required before claiming byte-for-byte reproducible dependency resolution. The current workflow provides traceable and cryptographically signed provenance, not traditional GPG package signing.

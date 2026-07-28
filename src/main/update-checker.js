@@ -1,7 +1,7 @@
 import { compareVersions } from './version-utils.js';
 
-const LATEST_RELEASE_API = 'https://api.github.com/repos/milmit/chatdesk-linux/releases/latest';
-const RELEASES_URL = 'https://github.com/milmit/chatdesk-linux/releases';
+const LATEST_RELEASE_API = 'https://api.github.com/repos/MilMit/chatdesk-linux/releases/latest';
+const RELEASES_URL = 'https://github.com/MilMit/chatdesk-linux/releases';
 
 function supportedAssets(assets) {
   return (Array.isArray(assets) ? assets : [])

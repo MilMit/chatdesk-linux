@@ -709,9 +709,9 @@ function createApplicationMenu() {
         { label: t('checkUpdates'), click: () => showPanel('about', { checkUpdates: true }) },
         { label: t('about'), click: () => showPanel('about') },
         { type: 'separator' },
-        { label: t('github'), click: () => void shell.openExternal('https://github.com/milmit/chatdesk-linux') },
+        { label: t('github'), click: () => void shell.openExternal('https://github.com/MilMit/chatdesk-linux') },
         { label: 'Report a Problem…', click: () => showPanel('report') },
-        { label: t('issue'), click: () => void shell.openExternal('https://github.com/milmit/chatdesk-linux/issues') },
+        { label: t('issue'), click: () => void shell.openExternal('https://github.com/MilMit/chatdesk-linux/issues') },
       ],
     },
   ]);
@@ -1212,7 +1212,7 @@ function registerIpc() {
     const result = await dialog.showSaveDialog(mainWindow, { defaultPath: 'chatdesk-issue-report.md', filters: [{ name: 'Markdown', extensions: ['md'] }] });
     if (result.canceled || !result.filePath) return false; fs.writeFileSync(result.filePath, `${report}\n`, { mode: 0o600 }); return true;
   });
-  ipcMain.handle('issue:open', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); await shell.openExternal('https://github.com/milmit/chatdesk-linux/issues/new?template=bug_report.yml'); return true; });
+  ipcMain.handle('issue:open', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); await shell.openExternal('https://github.com/MilMit/chatdesk-linux/issues/new?template=bug_report.yml'); return true; });
 
   ipcMain.handle('share:stage', (event, filePaths) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return stageSharedFiles(filePaths); });
   ipcMain.handle('share:list', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return serializeShareQueue(); });

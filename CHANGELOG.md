@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 - 2026-07-28
+
+- Added AppStream MetaInfo so Linux software centers can display the product name, developer, license, description, links, and application icon.
+- Added complete Debian maintainer, vendor, synopsis, description, package category, and priority metadata.
+- Added a post-build Debian enrichment step that embeds AppStream metadata and an application-ID icon directly into the `.deb`.
+- Updated the desktop entry icon to match the reverse-DNS application ID.
+- Added package metadata regression tests.
+
 ## 0.5.0 - 2026-07-28
 
 - Added Quick Capture for the Linux clipboard and selection buffer with profile and destination selection.

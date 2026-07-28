@@ -1,10 +1,13 @@
 {
   "name": "chatdesk-linux",
-  "version": "0.5.0",
-  "description": "ChatDesk Linux is an unofficial, security-hardened ChatGPT desktop app for Linux with quick capture, multi-profile windows, compact mode, workspaces, prompt library, deep links, local clipboard history, diagnostics, and signed release provenance.",
+  "version": "0.5.1",
+  "description": "Unofficial ChatGPT desktop client for Linux with isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux integration.",
   "type": "module",
   "main": "src/main/index.js",
-  "author": "MilMit",
+  "author": {
+    "name": "MilMit",
+    "url": "https://github.com/MilMit"
+  },
   "license": "MIT",
   "homepage": "https://github.com/MilMit/chatdesk-linux#readme",
   "repository": {
@@ -22,10 +25,11 @@
     "test": "node --test",
     "check": "node scripts/check-syntax.js",
     "dist": "npm run dist:linux",
-    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:linux": "electron-builder --linux AppImage deb && node scripts/enrich-deb.js",
     "dist:snap": "electron-builder --linux snap",
     "test:ui": "xvfb-run -a electron . --ui-smoke-test",
-    "sbom": "npm sbom --sbom-format spdx > dist/chatdesk-linux-sbom.spdx.json"
+    "sbom": "npm sbom --sbom-format spdx > dist/chatdesk-linux-sbom.spdx.json",
+    "dist:deb": "electron-builder --linux deb && node scripts/enrich-deb.js"
   },
   "devDependencies": {
     "electron": "43.2.0",
@@ -62,7 +66,8 @@
           "Categories": "Network;Utility;",
           "Keywords": "ChatGPT;OpenAI;AI;Assistant;Linux;Desktop;",
           "StartupWMClass": "io.github.milmit.chatdesk",
-          "MimeType": "x-scheme-handler/chatdesk;text/plain;text/markdown;application/pdf;application/json;image/png;image/jpeg;image/webp;"
+          "MimeType": "x-scheme-handler/chatdesk;text/plain;text/markdown;application/pdf;application/json;image/png;image/jpeg;image/webp;",
+          "Icon": "io.github.milmit.chatdesk"
         },
         "desktopActions": {
           "NewChat": {
@@ -111,7 +116,11 @@
           }
         }
       },
-      "syncDesktopName": true
+      "syncDesktopName": true,
+      "synopsis": "Unofficial ChatGPT desktop client for Linux",
+      "description": "ChatDesk Linux provides isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux desktop integration.",
+      "maintainer": "MilMit <MilMit@users.noreply.github.com>",
+      "vendor": "MilMit"
     },
     "snap": {
       "confinement": "strict",
@@ -145,7 +154,16 @@
         "description": "Share a file with ChatDesk Linux",
         "role": "Viewer"
       }
-    ]
+    ],
+    "deb": {
+      "packageName": "chatdesk-linux",
+      "packageCategory": "net",
+      "priority": "optional",
+      "maintainer": "MilMit <MilMit@users.noreply.github.com>",
+      "vendor": "MilMit",
+      "synopsis": "Unofficial ChatGPT desktop client for Linux",
+      "description": "ChatDesk Linux provides isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux desktop integration."
+    }
   },
   "keywords": [
     "chatgpt",

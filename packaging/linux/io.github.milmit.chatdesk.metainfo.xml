@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.milmit.chatdesk</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>ChatDesk Linux</name>
+  <summary>Unofficial ChatGPT desktop client for Linux</summary>
+  <developer id="io.github.milmit">
+    <name>MilMit</name>
+  </developer>
+  <description>
+    <p>
+      ChatDesk Linux is an unofficial desktop client for ChatGPT with isolated profiles,
+      workspaces, quick capture, a prompt library, download management, diagnostics,
+      and Linux desktop integration.
+    </p>
+    <p>
+      It is an independent open-source project and is not affiliated with or endorsed by OpenAI.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.milmit.chatdesk.desktop</launchable>
+  <pkgname>chatdesk-linux</pkgname>
+  <icon type="stock">io.github.milmit.chatdesk</icon>
+  <url type="homepage">https://github.com/MilMit/chatdesk-linux</url>
+  <url type="bugtracker">https://github.com/MilMit/chatdesk-linux/issues</url>
+  <url type="vcs-browser">https://github.com/MilMit/chatdesk-linux</url>
+  <categories>
+    <category>Network</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>ChatGPT</keyword>
+    <keyword>AI</keyword>
+    <keyword>assistant</keyword>
+    <keyword>OpenAI</keyword>
+    <keyword>Linux</keyword>
+  </keywords>
+  <provides>
+    <binary>chatdesk-linux</binary>
+  </provides>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.5.1" date="2026-07-28">
+      <description>
+        <p>Improved Debian and AppStream metadata for Linux software centers.</p>
+      </description>
+    </release>
+  </releases>
+</component>
