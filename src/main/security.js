@@ -13,6 +13,7 @@ const BASE_SECURE_WEB_PREFERENCES = Object.freeze({
   allowRunningInsecureContent: false,
   experimentalFeatures: false,
   webviewTag: false,
+  backgroundThrottling: true,
 });
 
 export function getSecureWebPreferences(partition) {

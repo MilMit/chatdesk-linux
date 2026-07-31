@@ -74,5 +74,6 @@ export class WorkspaceStore {
     this.store.replace(state);
     return this.list();
   }
+  async flush() { await this.store.flush(); }
   reset() { this.store.reset(); return this.list(); }
 }

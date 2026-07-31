@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.1
+
+- keep long ChatGPT responses active when the window is backgrounded
+- prevent temporary app suspension while long POST response streams are open
+- treat renderer `unresponsive` as recoverable instead of an immediate crash
+- add a non-destructive “Recover current chat” action that reloads the same conversation URL
+- log WebSocket/XHR stream failures without recording prompt or response content
+- expose stream stability state in Diagnostics
+
+## 0.6.0 - 2026-07-31
+
+- Added native context menus for text, editable fields, spelling, links, images, and ChatDesk actions.
+- Added Smart Copy, Smart Paste, Find in Conversation, navigation shortcuts, and Focus Mode.
+- Added Performance Monitor, cache controls, Reduced Motion, Memory Saver, and startup modes.
+- Added lazy utility windows and delayed once-daily update checks.
+- Added esbuild release bundles and removed synchronous file writes from main interaction paths.
+- Added a GitHub publishing script that validates, builds, tags, pushes, and uploads release assets.
+- Expanded native-interaction, packaging, settings, IPC, and performance contract tests.
+
 ## 0.5.1 - 2026-07-28
 
 - Added AppStream MetaInfo so Linux software centers can display the product name, developer, license, description, links, and application icon.

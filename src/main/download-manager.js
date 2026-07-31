@@ -30,6 +30,7 @@ export class DownloadManager {
     this.onUpdate = onUpdate;
     this.items = new Map(loadHistory(historyPath).map((item) => [item.id, { ...item, item: null }]));
     this.sessions = new WeakSet();
+    this.persistQueue = Promise.resolve();
   }
 
   attachSession(targetSession, profileName) {
@@ -125,10 +126,14 @@ export class DownloadManager {
   }
 
   #persist() {
-    fs.mkdirSync(path.dirname(this.historyPath), { recursive: true });
     const history = this.list().map(({ item, ...entry }) => entry);
-    fs.writeFileSync(this.historyPath, `${JSON.stringify(history, null, 2)}\n`, { mode: 0o600 });
+    this.persistQueue = this.persistQueue
+      .then(() => fs.promises.mkdir(path.dirname(this.historyPath), { recursive: true }))
+      .then(() => fs.promises.writeFile(this.historyPath, `${JSON.stringify(history, null, 2)}\n`, { mode: 0o600 }))
+      .catch((error) => console.warn('[ChatDesk] Failed to save download history:', error.message));
   }
+
+  async flush() { await this.persistQueue; }
 
   action(id, action) {
     const record = this.items.get(id);

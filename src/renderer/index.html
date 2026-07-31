@@ -42,8 +42,11 @@
             <label class="row"><span><b data-i18n="settings.startup">Launch at startup</b><small data-i18n="settings.startupHelp">Start after Linux login.</small></span><input type="checkbox" id="launchAtStartup"></label>
             <label class="row"><span><b data-i18n="settings.tray">Minimize to tray</b><small data-i18n="settings.trayHelp">Keep running after the window closes.</small></span><input type="checkbox" id="minimizeToTray"></label>
             <label class="row"><span><b data-i18n="settings.top">Always on top</b><small data-i18n="settings.topHelp">Keep ChatDesk above other windows.</small></span><input type="checkbox" id="alwaysOnTop"></label>
-            <label class="row"><span><b data-i18n="settings.animations">Animations</b><small data-i18n="settings.animationsHelp">Disable for a faster, calmer interface.</small></span><input type="checkbox" id="animations"></label>
+            <label class="row"><span><b>Motion and animations</b><small>Follow the system accessibility preference, reduce movement, or disable it.</small></span><select id="motionMode"><option value="system">Follow system</option><option value="full">Full</option><option value="reduced">Reduced</option><option value="off">Off</option></select></label>
             <label class="row"><span><b data-i18n="settings.menu">Auto-hide menu bar</b><small data-i18n="settings.menuHelp">Press Alt to reveal the menu.</small></span><input type="checkbox" id="autoHideMenuBar"></label>
+            <label class="row"><span><b>Startup mode</b><small>Open the last profile, Personal, Compact Mode, or start in the tray.</small></span><select id="startupMode"><option value="last">Last profile</option><option value="personal">Personal profile</option><option value="compact">Compact mode</option><option value="tray">Tray only</option></select></label>
+            <label class="row"><span><b>Native right-click menu</b><small>Copy, smart paste, spelling, links, images and ChatDesk actions.</small></span><input type="checkbox" id="nativeContextMenu"></label>
+            <label class="row"><span><b>Focus Mode stays on top</b><small>Keep the distraction-free window above other applications.</small></span><input type="checkbox" id="focusAlwaysOnTop"></label>
           </section>
 
           <section class="group"><h2 data-i18n="settings.activity">Activity popups</h2>
@@ -83,6 +86,14 @@
             <label class="row"><span><b>Maximum capture items</b><small>Stored with mode 0600 and protected by the Linux keyring when a secure backend is available.</small></span><input type="number" id="clipboardHistoryLimit" min="1" max="50" step="1"></label>
             <label class="row"><span><b>Compact width</b><small>Width used by Compact Mode.</small></span><input type="number" id="compactWidth" min="380" max="720" step="10"></label>
             <label class="row"><span><b>Compact side</b><small>Dock Compact Mode to the left or right.</small></span><select id="compactSide"><option value="right">Right</option><option value="left">Left</option></select></label>
+            <label class="row"><span><b>Memory Saver</b><small>Close hidden profile renderers after a delay while preserving their signed-in sessions.</small></span><select id="memorySaverMinutes"><option value="0">Never</option><option value="10">After 10 minutes</option><option value="30">After 30 minutes</option></select></label>
+            <label class="row"><span><b>Keep long responses active</b><small>Prevents background timer throttling and temporary app suspension while ChatGPT is generating a long answer.</small></span><input type="checkbox" id="keepLongResponsesActive"></label>
+            <label class="row"><span><b>Connection recovery alerts</b><small>Show a non-destructive recovery action when a ChatGPT stream or renderer becomes temporarily unavailable.</small></span><input type="checkbox" id="streamRecoveryAlerts"></label>
+          </section>
+
+          <section class="group"><h2>Cache and storage</h2>
+            <div class="row"><span><b>Current profile cache</b><small id="cacheSizeText">Not measured</small></span><button id="refreshCacheSize">Refresh</button></div>
+            <div class="button-grid"><button id="clearHttpCache">Clear HTTP Cache</button><button id="clearCodeCache">Clear Code Cache</button><button id="clearSessionStorage" class="danger">Clear Session Data</button></div>
           </section>
 
           <section class="group"><h2 data-i18n="settings.privacy">Privacy and recovery</h2>
@@ -99,6 +110,7 @@
 
         <div id="diagnosticsContent" class="content hidden">
           <div id="diagnosticsGrid" class="diagnostics-grid"></div>
+          <section class="performance-section"><div class="section-toolbar"><div><h2>Performance</h2><p>Live process, cache and startup measurements.</p></div><button id="refreshPerformance">Refresh</button></div><div id="performanceGrid" class="diagnostics-grid"></div><div class="button-grid"><button id="copyPerformance">Copy Performance Report</button></div></section>
           <div class="button-grid"><button id="copyDiagnostics" data-i18n="diagnostics.copy">Copy Diagnostics</button><button id="testClipboard" data-i18n="diagnostics.clipboardTest">Test Clipboard</button><button id="openLogs" data-i18n="diagnostics.logs">Open Log Folder</button><button id="diagClearCache" data-i18n="settings.clearCache">Clear Cache</button><button id="diagResetSession" data-i18n="diagnostics.resetSession">Reset Session</button><button id="restartApp" data-i18n="diagnostics.restart">Restart App</button><button id="safeModeButton" data-i18n="diagnostics.safeMode">Start in Safe Mode</button></div>
           <p class="privacy-note">Diagnostics never include your prompts, responses, passwords or cookies.</p>
         </div>
@@ -166,6 +178,6 @@
     </section>
   </main>
   <div id="toast" class="toast"></div>
-  <script type="module" src="renderer.js"></script>
+  <script src="../../build/renderer/renderer.js"></script>
 </body>
 </html>

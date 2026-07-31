@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { writeJsonFile } from './atomic-json-store.js';
 
 const DEFAULT_BOUNDS = Object.freeze({ width: 1280, height: 820 });
 
@@ -32,6 +32,8 @@ export function boundsIntersectWorkArea(bounds, workArea) {
 export class WindowStateStore {
   constructor(filePath) {
     this.filePath = filePath;
+    this.writeQueue = Promise.resolve();
+    this.lastWriteError = null;
   }
 
   read(displays = []) {
@@ -43,7 +45,7 @@ export class WindowStateStore {
       bounds = sanitizeBounds(parsed.bounds);
       maximized = parsed.maximized === true;
     } catch {
-      // Defaults are intentional.
+      // A small one-time startup read keeps window creation deterministic.
     }
 
     if ('x' in bounds && displays.length > 0) {
@@ -57,21 +59,27 @@ export class WindowStateStore {
     return { bounds, maximized };
   }
 
+  #queue(payload) {
+    const snapshot = structuredClone(payload);
+    this.writeQueue = this.writeQueue
+      .then(() => writeJsonFile(this.filePath, snapshot))
+      .catch((error) => { this.lastWriteError = error; console.warn('[ChatDesk] Failed to save window state:', error.message); });
+  }
+
   writeBounds(bounds, maximized = false) {
-    const payload = { bounds: sanitizeBounds(bounds), maximized: maximized === true };
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    fs.writeFileSync(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+    this.#queue({ bounds: sanitizeBounds(bounds), maximized: maximized === true });
   }
 
   write(window) {
     if (!window || window.isDestroyed()) return;
-
-    const payload = {
+    this.#queue({
       bounds: window.isMaximized() ? window.getNormalBounds() : window.getBounds(),
       maximized: window.isMaximized(),
-    };
+    });
+  }
 
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    fs.writeFileSync(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+  async flush() {
+    await this.writeQueue;
+    if (this.lastWriteError) throw this.lastWriteError;
   }
 }

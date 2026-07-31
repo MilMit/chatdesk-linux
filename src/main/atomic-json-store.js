@@ -9,11 +9,11 @@ export function readJsonFile(filePath, fallback) {
   }
 }
 
-export function writeJsonFile(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+export async function writeJsonFile(filePath, value) {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.tmp`;
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(temporaryPath, filePath);
+  await fs.promises.writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  await fs.promises.rename(temporaryPath, filePath);
 }
 
 export class AtomicJsonStore {
@@ -24,19 +24,36 @@ export class AtomicJsonStore {
     this.read = typeof io.read === 'function' ? io.read : readJsonFile;
     this.write = typeof io.write === 'function' ? io.write : writeJsonFile;
     this.value = this.sanitizer(this.read(filePath, this.fallback));
+    this.writeQueue = Promise.resolve();
+    this.lastWriteError = null;
   }
 
   get() {
     return structuredClone(this.value);
   }
 
+  #queueWrite(value) {
+    const snapshot = structuredClone(value);
+    this.writeQueue = this.writeQueue
+      .then(() => this.write(this.filePath, snapshot))
+      .catch((error) => {
+        this.lastWriteError = error;
+        console.warn(`[ChatDesk] Failed to persist ${path.basename(this.filePath)}:`, error.message);
+      });
+  }
+
   replace(next) {
     this.value = this.sanitizer(next);
-    this.write(this.filePath, this.value);
+    this.#queueWrite(this.value);
     return this.get();
   }
 
   reset() {
     return this.replace(this.fallback);
+  }
+
+  async flush() {
+    await this.writeQueue;
+    if (this.lastWriteError) throw this.lastWriteError;
   }
 }

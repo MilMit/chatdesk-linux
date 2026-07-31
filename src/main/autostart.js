@@ -10,17 +10,15 @@ export function getAutostartPath() {
   return path.join(os.homedir(), '.config', 'autostart', 'chatdesk-linux.desktop');
 }
 
-export function setLinuxAutostart({ enabled, executable, appPath, isPackaged }) {
+export async function setLinuxAutostart({ enabled, executable, appPath, isPackaged }) {
   const filePath = getAutostartPath();
 
   if (!enabled) {
-    try { fs.unlinkSync(filePath); } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    await fs.promises.rm(filePath, { force: true });
     return;
   }
 
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   const args = isPackaged ? [] : [appPath];
   const exec = [executable, ...args].map(quoteDesktopArgument).join(' ');
   const desktopFile = [
@@ -35,5 +33,5 @@ export function setLinuxAutostart({ enabled, executable, appPath, isPackaged }) 
     '',
   ].join('\n');
 
-  fs.writeFileSync(filePath, desktopFile, { mode: 0o644 });
+  await fs.promises.writeFile(filePath, desktopFile, { mode: 0o644 });
 }

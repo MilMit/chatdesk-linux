@@ -5,5 +5,3 @@ out/
 .DS_Store
 .vscode/
 .idea/
-.env
-.env.*

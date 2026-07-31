@@ -84,7 +84,8 @@ function showPanel(mode, payload = {}) {
   $('panelCloseButton').classList.toggle('hidden', mode === 'onboarding');
   $(content).classList.remove('hidden');
   if (mode === 'downloads') void loadDownloads();
-  if (mode === 'diagnostics') void loadDiagnostics();
+  if (mode === 'diagnostics') { void loadDiagnostics(); void loadPerformance(); }
+  if (mode === 'settings') void loadCacheSize();
   if (mode === 'about' && payload?.checkUpdates) void checkUpdates();
   if (mode === 'workspaces') void loadWorkspaces();
   if (mode === 'prompts') void loadPrompts();
@@ -115,15 +116,20 @@ function applySettings(next) {
   $('themeSelect').value = next.theme;
   for (const [id, key] of [
     ['launchAtStartup', 'launchAtStartup'], ['minimizeToTray', 'minimizeToTray'], ['alwaysOnTop', 'alwaysOnTop'],
-    ['animations', 'animations'], ['autoHideMenuBar', 'autoHideMenuBar'], ['activityPopups', 'activityPopups'],
+    ['autoHideMenuBar', 'autoHideMenuBar'], ['activityPopups', 'activityPopups'],
     ['connectionActivity', 'connectionActivity'], ['autoHideCompletedDownloads', 'autoHideCompletedDownloads'],
     ['hardwareAcceleration', 'hardwareAcceleration'], ['spellcheck', 'spellcheck'], ['notifications', 'notifications'],
     ['externalLinks', 'externalLinks'], ['autoCheckUpdates', 'autoCheckUpdates'], ['clipboardHistoryEnabled', 'clipboardHistoryEnabled'],
+    ['nativeContextMenu', 'nativeContextMenu'], ['focusAlwaysOnTop', 'focusAlwaysOnTop'],
+    ['keepLongResponsesActive', 'keepLongResponsesActive'], ['streamRecoveryAlerts', 'streamRecoveryAlerts'],
   ]) $(id).checked = next[key] === true;
   $('clipboardHistoryEnabled').checked = next.clipboardHistoryEnabled === true;
   $('clipboardHistoryLimit').value = next.clipboardHistoryLimit ?? 20;
   $('compactWidth').value = next.compactWidth ?? 460;
   $('compactSide').value = next.compactSide ?? 'right';
+  $('motionMode').value = next.motionMode ?? 'system';
+  $('startupMode').value = next.startupMode ?? 'last';
+  $('memorySaverMinutes').value = String(next.memorySaverMinutes ?? 10);
   $('zoomFactor').value = next.zoomFactor;
   $('zoomValue').textContent = `${Math.round(next.zoomFactor * 100)}%`;
   $('mainShortcut').value = next.mainShortcut;
@@ -137,7 +143,10 @@ function applySettings(next) {
   $('chromiumVersion').textContent = next.versions?.chromium ?? '—';
   $('nodeVersion').textContent = next.versions?.node ?? '—';
   $('safeModeButton').textContent = next.safeMode ? t(currentLanguage, 'menu.normalMode') : t(currentLanguage, 'diagnostics.safeMode');
-  document.body.classList.toggle('no-animations', next.animations === false || next.safeMode === true);
+  const motion = next.resolvedMotionMode || next.motionMode || 'full';
+  document.body.classList.toggle('no-animations', motion === 'off' || next.safeMode === true);
+  document.body.classList.toggle('reduced-motion', motion === 'reduced');
+  document.body.classList.toggle('focus-mode', next.focusMode === true);
 }
 
 async function updateSetting(key, value) {
@@ -255,6 +264,12 @@ async function loadDiagnostics() {
     'Activity Center': data.activityCenter || 'Unknown',
     'Clipboard Write': data.clipboardWrite || 'Unknown',
     'Last Crash': data.lastCrash || 'None recorded',
+    'Long-task protection': data.longResponseProtection || 'Unknown',
+    'Background throttling': data.backgroundThrottling || 'Unknown',
+    'Renderer state': data.rendererState || 'Unknown',
+    'Active stream requests': String(data.activeLongResponseRequests ?? 0),
+    'Suspension protection': data.streamPowerProtection || 'Unknown',
+    'Last stream error': data.lastStreamError || 'None recorded',
     'Log File': data.logFile,
   };
   $('diagnosticsGrid').replaceChildren();
@@ -264,6 +279,36 @@ async function loadDiagnostics() {
     const content = document.createElement('b'); content.textContent = value;
     cell.append(label, content); $('diagnosticsGrid').append(cell);
   }
+}
+
+function renderMetricGrid(targetId, fields) {
+  const target = $(targetId); target.replaceChildren();
+  for (const [key, value] of Object.entries(fields)) {
+    const cell = document.createElement('div'); cell.className = 'diagnostic';
+    const label = document.createElement('span'); label.textContent = key;
+    const content = document.createElement('b'); content.textContent = value;
+    cell.append(label, content); target.append(cell);
+  }
+}
+
+async function loadPerformance() {
+  const data = await safeInvoke('performance:get');
+  if (!data) return;
+  renderMetricGrid('performanceGrid', {
+    'Total memory': formatBytes(data.totalMemoryBytes),
+    'Total CPU': `${Number(data.totalCpuPercent || 0).toFixed(2)}%`,
+    Processes: data.processCount,
+    'Active windows': data.activeWindows,
+    'Hidden windows': data.hiddenWindows,
+    'HTTP cache': formatBytes(data.cacheBytes),
+    'Startup elapsed': `${data.startupMilliseconds} ms`,
+    'Memory Saver': data.memorySaverMinutes ? `${data.memorySaverMinutes} min` : 'Off',
+  });
+}
+
+async function loadCacheSize() {
+  const data = await safeInvoke('cache:get');
+  if (data) $('cacheSizeText').textContent = `${formatBytes(data.bytes)} — ${data.profile}`;
 }
 
 async function checkUpdates() {
@@ -461,12 +506,17 @@ $('retryButton').onclick = () => api.send('app:retry');
 $('offlineDiagnostics').onclick = () => showPanel('diagnostics');
 $('languageSelect').onchange = (event) => updateSetting('language', event.target.value);
 $('themeSelect').onchange = (event) => updateSetting('theme', event.target.value);
+$('motionMode').onchange = (event) => updateSetting('motionMode', event.target.value);
+$('startupMode').onchange = (event) => updateSetting('startupMode', event.target.value);
+$('memorySaverMinutes').onchange = (event) => updateSetting('memorySaverMinutes', Number(event.target.value));
 for (const [id, key] of [
   ['launchAtStartup', 'launchAtStartup'], ['minimizeToTray', 'minimizeToTray'], ['alwaysOnTop', 'alwaysOnTop'],
-  ['animations', 'animations'], ['autoHideMenuBar', 'autoHideMenuBar'], ['activityPopups', 'activityPopups'],
+  ['autoHideMenuBar', 'autoHideMenuBar'], ['activityPopups', 'activityPopups'],
   ['connectionActivity', 'connectionActivity'], ['autoHideCompletedDownloads', 'autoHideCompletedDownloads'],
   ['hardwareAcceleration', 'hardwareAcceleration'], ['spellcheck', 'spellcheck'], ['notifications', 'notifications'],
   ['externalLinks', 'externalLinks'], ['autoCheckUpdates', 'autoCheckUpdates'], ['clipboardHistoryEnabled', 'clipboardHistoryEnabled'],
+  ['nativeContextMenu', 'nativeContextMenu'], ['focusAlwaysOnTop', 'focusAlwaysOnTop'],
+  ['keepLongResponsesActive', 'keepLongResponsesActive'], ['streamRecoveryAlerts', 'streamRecoveryAlerts'],
 ]) $(id).onchange = (event) => updateSetting(key, event.target.checked);
 $('zoomFactor').oninput = (event) => { $('zoomValue').textContent = `${Math.round(event.target.value * 100)}%`; };
 $('zoomFactor').onchange = (event) => updateSetting('zoomFactor', Number(event.target.value));
@@ -480,7 +530,11 @@ $('chooseDownloadFolder').onclick = async () => {
   const value = await safeInvoke('settings:choose-download-folder');
   if (typeof value === 'string') $('downloadPathText').textContent = value || t(currentLanguage, 'common.systemDefault');
 };
-$('clearCacheButton').onclick = async () => { if (await safeInvoke('settings:clear-cache')) showToast(t(currentLanguage, 'toast.cacheCleared'), 'success'); };
+$('refreshCacheSize').onclick = loadCacheSize;
+$('clearHttpCache').onclick = async () => { if (await safeInvoke('cache:clear', 'http')) { await loadCacheSize(); showToast('HTTP cache cleared.', 'success'); } };
+$('clearCodeCache').onclick = async () => { if (await safeInvoke('cache:clear', 'code')) { await loadCacheSize(); showToast('Code cache cleared.', 'success'); } };
+$('clearSessionStorage').onclick = async () => { if (confirm('Clear cookies and session storage for the current profile?') && await safeInvoke('cache:clear', 'session')) { await loadCacheSize(); api.send('ui:close'); } };
+$('clearCacheButton').onclick = async () => { if (await safeInvoke('settings:clear-cache')) { await loadCacheSize(); showToast(t(currentLanguage, 'toast.cacheCleared'), 'success'); } };
 $('clearSessionButton').onclick = async () => {
   const message = currentLanguage === 'fa' ? 'از پروفایل فعلی خارج و اطلاعات نشست پاک شود؟' : 'Sign out and clear stored ChatGPT data for the current profile?';
   if (confirm(message) && await safeInvoke('settings:clear-session')) api.send('ui:close');
@@ -550,6 +604,8 @@ $('clearDownloadHistory').onclick = async () => {
   const items = await safeInvoke('downloads:clear-history');
   if (items) { downloads.clear(); for (const item of items) downloads.set(item.id, item); renderDownloads(); }
 };
+$('refreshPerformance').onclick = loadPerformance;
+$('copyPerformance').onclick = async () => { if (await safeInvoke('performance:copy')) showToast('Performance report copied.', 'success'); };
 $('copyDiagnostics').onclick = async () => {
   const result = await safeInvoke('diagnostics:copy', undefined, t(currentLanguage, 'toast.copyFailed'));
   if (result === true) showToast(t(currentLanguage, 'toast.copied'), 'success');
@@ -601,6 +657,7 @@ api.on('app:offline', (payload) => {
 });
 api.on('theme:changed', ({ dark }) => document.body.classList.toggle('light', !dark));
 api.on('settings:changed', applySettings);
+api.on('focus:changed', ({ enabled }) => document.body.classList.toggle('focus-mode', enabled === true));
 api.on('profiles:changed', applyProfiles);
 api.on('download:update', (item) => {
   downloads.set(item.id, item);

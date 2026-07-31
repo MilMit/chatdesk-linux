@@ -180,3 +180,17 @@ Read [SECURITY.md](SECURITY.md) before changing security controls.
 ## License and upstream
 
 MIT licensed. Derived from `xanmoy/chatgpt-desktop-client`; the original copyright notice is preserved.
+
+## Publish a release
+
+After signing in with GitHub CLI and reviewing the changes:
+
+```bash
+npm run release:github
+```
+
+The script runs tests, builds AppImage and DEB assets, creates checksums and an SPDX SBOM, pushes `main` and the version tag, and ensures the GitHub Release contains the artifacts.
+
+### Long-response stability
+
+ChatDesk keeps long Thinking responses active in the background, avoids treating temporary renderer stalls as crashes, records privacy-safe stream errors in Diagnostics, and offers **Recover Current Chat** to reload the same conversation when the server has completed an answer after a connection interruption.

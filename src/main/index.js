@@ -10,6 +10,7 @@ import {
   nativeImage,
   nativeTheme,
   net,
+  powerSaveBlocker,
   screen,
   safeStorage,
   shell,
@@ -22,20 +23,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ActivityWindow } from './activity-window.js';
 import { CaptureStore } from './capture-store.js';
+import { installNativeContextMenu } from './context-menu.js';
 import { collectSharedFiles, findDeepLink, parseDeepLink } from './deep-link.js';
 import { summarizeDownloads } from './activity-state.js';
 import { setLinuxAutostart } from './autostart.js';
 import { formatDiagnostics, desktopEnvironment, displayProtocol } from './diagnostics.js';
 import { DownloadManager } from './download-manager.js';
+import { FindController } from './find-controller.js';
 import { FileLogger, sanitizeUrlForLog } from './logger.js';
 import { runHealthChecks } from './health-check.js';
 import { formatIssueReport } from './issue-report.js';
+import { classifyUrl } from './navigation-policy.js';
+import { collectPerformanceReport, formatPerformanceReport } from './performance-monitor.js';
 import { resolveLanguage, stringsFor } from './locale.js';
 import { PROFILE_ICON_GLYPHS, ProfileStore, partitionForProfile } from './profile-store.js';
 import { ProfileWindowManager } from './profile-window-manager.js';
 import { expandPromptTemplate, PromptStore } from './prompt-store.js';
 import { getSecureWebPreferences, secureWebContents, setExternalLinksEnabled } from './security.js';
 import { DEFAULT_SETTINGS, sanitizeSettings, SettingsStore } from './settings-store.js';
+import { isLongResponseRequest, isObservedConnectionRequest, isRecoverableConnectionError, shouldDisableBackgroundThrottling } from './stream-stability.js';
 import { checkForUpdates } from './update-checker.js';
 import { getAppViewBounds, shouldShowAppView } from './view-layout.js';
 import { WindowStateStore } from './window-state.js';
@@ -46,16 +52,22 @@ const APP_ID = 'io.github.milmit.chatdesk';
 const REVEAL_TIMEOUT_MS = 3500;
 const FAILURE_TIMEOUT_MS = 10000;
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const UPDATE_STARTUP_DELAY_MS = 15_000;
+const UNRESPONSIVE_GRACE_MS = 30_000;
+const STREAM_POWER_RELEASE_MS = 4_000;
+const APP_START_AT = Date.now();
 const currentFile = fileURLToPath(import.meta.url);
 const currentDirectory = path.dirname(currentFile);
 const rootDirectory = path.resolve(currentDirectory, '../..');
 const iconPath = path.join(rootDirectory, 'assets/icon.png');
 const shellPath = path.join(rootDirectory, 'src/renderer/index.html');
-const shellPreloadPath = path.join(rootDirectory, 'src/preload/chrome-preload.cjs');
+const shellPreloadPath = path.join(rootDirectory, 'build/preload/chrome-preload.cjs');
 const quickChatPath = path.join(rootDirectory, 'src/quick-chat/index.html');
-const quickChatPreloadPath = path.join(rootDirectory, 'src/preload/quick-chat-preload.cjs');
+const quickChatPreloadPath = path.join(rootDirectory, 'build/preload/quick-chat-preload.cjs');
 const activityPath = path.join(rootDirectory, 'src/activity/index.html');
-const activityPreloadPath = path.join(rootDirectory, 'src/preload/activity-preload.cjs');
+const activityPreloadPath = path.join(rootDirectory, 'build/preload/activity-preload.cjs');
+const findPath = path.join(rootDirectory, 'src/find/index.html');
+const findPreloadPath = path.join(rootDirectory, 'build/preload/find-preload.cjs');
 const SAFE_MODE = process.argv.includes('--safe-mode');
 const UI_SMOKE_TEST = process.argv.includes('--ui-smoke-test');
 
@@ -87,7 +99,7 @@ const promptStore = new PromptStore(path.join(userDataPath, 'prompts.json'));
 const workspaceStore = new WorkspaceStore(path.join(userDataPath, 'workspaces.json'));
 const shareQueue = new Map();
 let settings = SAFE_MODE
-  ? { ...DEFAULT_SETTINGS, minimizeToTray: false, launchAtStartup: false, animations: false, hardwareAcceleration: false }
+  ? { ...DEFAULT_SETTINGS, minimizeToTray: false, launchAtStartup: false, animations: false, motionMode: 'off', hardwareAcceleration: false }
   : settingsStore.get();
 if (!settings.hardwareAcceleration || SAFE_MODE) app.disableHardwareAcceleration();
 
@@ -113,6 +125,38 @@ let normalWindowBounds = null;
 let shortcutStatus = {};
 let requestedQuickProfileId = '';
 let protocolRegistered = false;
+let findController = null;
+let focusMode = false;
+let requestedQuickText = '';
+let startupViewLoaded = false;
+let persistenceFlushed = false;
+let flushingQuit = false;
+let rendererUnresponsive = false;
+let unresponsiveTimer = null;
+let streamPowerBlockerId = null;
+let streamPowerReleaseTimer = null;
+const activeLongResponseRequests = new Set();
+const monitoredSessions = new WeakSet();
+let lastStreamError = null;
+
+
+async function flushPersistentState() {
+  const writes = [
+    settingsStore.flush?.(),
+    profileStore.flush?.(),
+    windowStateStore.flush?.(),
+    captureStore?.flush?.(),
+    promptStore.flush?.(),
+    workspaceStore.flush?.(),
+    downloadManager?.flush?.(),
+    profileWindowManager?.flush?.(),
+    logger.flush?.(),
+  ].filter(Boolean);
+  await Promise.race([
+    Promise.allSettled(writes),
+    new Promise((resolve) => setTimeout(resolve, 1500)),
+  ]);
+}
 
 function isAlive(value) { return value && !value.isDestroyed(); }
 function activeProfile() { return profileStore.getActive(); }
@@ -165,9 +209,9 @@ function rememberCommand(payload = {}) {
   sendToShell('settings:changed', publicSettings());
 }
 
-function listLogLines({ level = 'all', limit = 400 } = {}) {
+async function listLogLines({ level = 'all', limit = 400 } = {}) {
   try {
-    const lines = fs.readFileSync(logPath, 'utf8').split(/\r?\n/).filter(Boolean);
+    const lines = (await fs.promises.readFile(logPath, 'utf8')).split(/\r?\n/).filter(Boolean);
     const filtered = level === 'all' ? lines : lines.filter((line) => line.toLowerCase().includes(`[${level.toLowerCase()}]`));
     return filtered.slice(-Math.min(2000, Math.max(1, Number(limit) || 400)));
   } catch { return []; }
@@ -177,11 +221,11 @@ function serializeShareQueue() {
   return [...shareQueue.values()].map((item) => ({ ...item }));
 }
 
-function stageSharedFiles(values = []) {
+async function stageSharedFiles(values = []) {
   for (const raw of Array.isArray(values) ? values : []) {
     const filePath = path.resolve(String(raw || ''));
     try {
-      const stat = fs.statSync(filePath);
+      const stat = await fs.promises.stat(filePath);
       if (!stat.isFile()) continue;
       const id = Buffer.from(filePath).toString('base64url').slice(0, 80);
       shareQueue.set(id, {
@@ -288,6 +332,76 @@ function writeClipboardText(value) {
   }
 }
 
+function resolvedMotionMode() {
+  if (SAFE_MODE || settings.motionMode === 'off') return 'off';
+  if (settings.motionMode === 'reduced') return 'reduced';
+  if (settings.motionMode === 'full') return 'full';
+  return 'system';
+}
+
+function openQuickCaptureWithText(text = '', profileId = '') {
+  requestedQuickText = String(text || '').trim().slice(0, 20_000);
+  requestedQuickProfileId = profileId || requestedQuickProfileId;
+  toggleQuickChat({ forceShow: true, profileId });
+}
+
+async function applyPromptToSelection(promptId, selectedText = '', profileId = activeProfile()?.id || '') {
+  const prompt = promptStore.get(promptId);
+  if (!prompt) throw new Error('Prompt not found.');
+  const profile = profileStore.get(profileId) || activeProfile();
+  const text = expandPromptTemplate(prompt.template, {
+    clipboard: selectedText || readClipboardSource('clipboard'),
+    selection: selectedText || readClipboardSource('selection'),
+    date: new Date().toLocaleDateString(),
+    profile: profile?.name || '',
+  });
+  writeClipboardText(text);
+  maybeStoreCapture(text, 'prompt', profile?.id || '');
+  openQuickCaptureWithText(text, profile?.id || '');
+  return true;
+}
+
+function contextMenuOptions(getWindow = () => mainWindow) {
+  return {
+    getWindow,
+    isEnabled: () => settings.nativeContextMenu !== false,
+    getPrompts: () => promptStore.list(),
+    getProfiles: () => profileStore.getState().profiles,
+    onQuickCapture: (text) => openQuickCaptureWithText(text),
+    onApplyPrompt: (promptId, text) => void applyPromptToSelection(promptId, text),
+    onAddCapture: (text) => {
+      const result = maybeStoreCapture(text, 'context-menu');
+      const message = result.saved ? 'Added to private capture history.' : 'Private capture history is disabled.';
+      activityWindow?.showToast(message, { type: result.saved ? 'success' : 'info' });
+    },
+    onCommandPalette: showCommandPalette,
+    onReportProblem: () => showPanel('report'),
+    onToast: (message, type = 'info') => activityWindow?.showToast(message, { type }),
+    onOpenProfileWindow: (profileId, url) => openProfileWindow(profileId, { url }),
+    onOpenLink: async (url) => {
+      const classification = classifyUrl(url);
+      if (classification === 'app' || classification === 'auth') {
+        focusMainWindow();
+        if (!appView) createAppView();
+        await loadApp(url);
+      } else if (classification === 'external') await shell.openExternal(url);
+    },
+  };
+}
+
+function setFocusMode(enabled) {
+  focusMode = enabled === true;
+  if (!isAlive(mainWindow)) return { enabled: false };
+  mainWindow.setAutoHideMenuBar(focusMode || settings.autoHideMenuBar);
+  mainWindow.setMenuBarVisibility(!focusMode && !settings.autoHideMenuBar);
+  mainWindow.setAlwaysOnTop(focusMode ? settings.focusAlwaysOnTop : settings.alwaysOnTop);
+  activityWindow?.setSuppressed(focusMode || chromeMode !== 'app');
+  findController?.close();
+  rebuildMenus();
+  sendToShell('focus:changed', { enabled: focusMode });
+  return { enabled: focusMode };
+}
+
 function sendToShell(channel, payload) {
   if (isAlive(mainWindow) && !mainWindow.webContents.isDestroyed()) mainWindow.webContents.send(channel, payload);
 }
@@ -307,12 +421,13 @@ function layoutAppView() {
 function setChromeMode(mode, payload = undefined) {
   chromeMode = mode;
   layoutAppView();
-  activityWindow?.setSuppressed(mode !== 'app');
+  activityWindow?.setSuppressed(focusMode || mode !== 'app');
   sendToShell('ui:show', { mode, payload });
 }
 
 function focusMainWindow() {
   if (!isAlive(mainWindow)) return;
+  if (!appView) { createAppView(); void loadApp(); }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
@@ -333,32 +448,34 @@ function scheduleWindowStateSave() {
 
 function applyTheme() {
   nativeTheme.themeSource = settings.theme;
-  sendToShell('theme:changed', { source: settings.theme, dark: nativeTheme.shouldUseDarkColors });
+  const motionMode = resolvedMotionMode();
+  sendToShell('theme:changed', { source: settings.theme, dark: nativeTheme.shouldUseDarkColors, motionMode });
   activityWindow?.updateSettings();
 }
 
 function applyWindowSettings() {
   if (!isAlive(mainWindow)) return;
-  mainWindow.setAlwaysOnTop(settings.alwaysOnTop);
-  mainWindow.setAutoHideMenuBar(settings.autoHideMenuBar);
-  mainWindow.setMenuBarVisibility(!settings.autoHideMenuBar);
+  mainWindow.setAlwaysOnTop(focusMode ? settings.focusAlwaysOnTop : settings.alwaysOnTop);
+  mainWindow.setAutoHideMenuBar(focusMode || settings.autoHideMenuBar);
+  mainWindow.setMenuBarVisibility(!focusMode && !settings.autoHideMenuBar);
 }
 
 function applyWebSettings() {
   if (!appView || appView.webContents.isDestroyed()) return;
   appView.webContents.setZoomFactor(settings.zoomFactor);
   appView.webContents.session.setSpellCheckerEnabled(settings.spellcheck);
+  appView.webContents.setBackgroundThrottling(!shouldDisableBackgroundThrottling(settings));
   setExternalLinksEnabled(settings.externalLinks);
 }
 
 function applyAutostart() {
   if (SAFE_MODE) return;
-  setLinuxAutostart({
+  void setLinuxAutostart({
     enabled: settings.launchAtStartup,
     executable: process.execPath,
     appPath: app.getAppPath(),
     isPackaged: app.isPackaged,
-  });
+  }).catch((error) => console.warn('[ChatDesk] Could not update autostart:', error.message));
 }
 
 function safelyRegisterShortcut(accelerator, callback) {
@@ -390,6 +507,132 @@ function registerShortcuts(target = settings) {
   shortcutStatus = status;
   sendToShell('shortcuts:status', status);
   return status;
+}
+
+function stopStreamPowerProtection() {
+  clearTimeout(streamPowerReleaseTimer);
+  streamPowerReleaseTimer = null;
+  if (streamPowerBlockerId !== null && powerSaveBlocker.isStarted(streamPowerBlockerId)) {
+    powerSaveBlocker.stop(streamPowerBlockerId);
+  }
+  streamPowerBlockerId = null;
+}
+
+function refreshStreamPowerProtection() {
+  clearTimeout(streamPowerReleaseTimer);
+  streamPowerReleaseTimer = null;
+  const enabled = !SAFE_MODE && settings.keepLongResponsesActive !== false;
+  if (enabled && activeLongResponseRequests.size > 0) {
+    if (streamPowerBlockerId === null || !powerSaveBlocker.isStarted(streamPowerBlockerId)) {
+      streamPowerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+      console.info('[ChatDesk] Long-response suspension protection started.');
+    }
+    return;
+  }
+  streamPowerReleaseTimer = setTimeout(() => {
+    stopStreamPowerProtection();
+    console.info('[ChatDesk] Long-response suspension protection stopped.');
+  }, STREAM_POWER_RELEASE_MS);
+  streamPowerReleaseTimer.unref?.();
+}
+
+function requestKey(details = {}) {
+  return `${details.webContentsId || 0}:${details.id || 0}`;
+}
+
+function clearLongResponseRequestsForWebContents(webContentsId) {
+  const prefix = `${Number(webContentsId) || 0}:`;
+  for (const key of [...activeLongResponseRequests]) {
+    if (key.startsWith(prefix)) activeLongResponseRequests.delete(key);
+  }
+  refreshStreamPowerProtection();
+}
+
+function handleObservedConnectionError(details = {}) {
+  if (!isRecoverableConnectionError(details)) return;
+  lastStreamError = {
+    at: new Date().toISOString(),
+    error: String(details.error || details.errorDescription || 'Unknown network error'),
+    resourceType: details.resourceType || 'unknown',
+    url: sanitizeUrlForLog(details.url || ''),
+  };
+  console.warn(`[ChatDesk] ChatGPT connection error: ${lastStreamError.error} (${lastStreamError.resourceType}) ${lastStreamError.url}`);
+  if (settings.streamRecoveryAlerts !== false && details.webContentsId === appView?.webContents.id) {
+    activityWindow?.showToast('The ChatGPT response stream was interrupted. The server may still finish the answer.', {
+      type: 'error',
+      duration: 0,
+      actionLabel: 'Recover current chat',
+      action: 'recover-chat',
+    });
+  }
+}
+
+function installStreamStabilityMonitor(targetSession) {
+  if (!targetSession || monitoredSessions.has(targetSession)) return;
+  monitoredSessions.add(targetSession);
+  const filter = { urls: ['*://chatgpt.com/*', '*://*.chatgpt.com/*', '*://openai.com/*', '*://*.openai.com/*'] };
+  targetSession.webRequest.onBeforeRequest(filter, (details, callback) => {
+    if (isLongResponseRequest(details)) {
+      activeLongResponseRequests.add(requestKey(details));
+      refreshStreamPowerProtection();
+    }
+    callback({ cancel: false });
+  });
+  const finish = (details) => {
+    activeLongResponseRequests.delete(requestKey(details));
+    refreshStreamPowerProtection();
+  };
+  targetSession.webRequest.onCompleted(filter, finish);
+  targetSession.webRequest.onErrorOccurred(filter, (details) => {
+    finish(details);
+    if (isObservedConnectionRequest(details)) handleObservedConnectionError(details);
+  });
+}
+
+function clearUnresponsiveState({ recovered = false } = {}) {
+  clearTimeout(unresponsiveTimer);
+  unresponsiveTimer = null;
+  const wasUnresponsive = rendererUnresponsive;
+  rendererUnresponsive = false;
+  if (recovered && wasUnresponsive && settings.streamRecoveryAlerts !== false) {
+    activityWindow?.showToast('ChatGPT became responsive again. Your current conversation was preserved.', { type: 'success', duration: 3600 });
+  }
+}
+
+function handleRendererUnresponsive() {
+  if (rendererUnresponsive) return;
+  rendererUnresponsive = true;
+  console.warn('[ChatDesk] ChatGPT renderer became temporarily unresponsive; waiting before offering recovery.');
+  if (settings.streamRecoveryAlerts !== false) {
+    activityWindow?.showToast('ChatGPT is busy. ChatDesk is waiting without reloading your conversation.', {
+      type: 'info',
+      duration: 0,
+      actionLabel: 'Recover now',
+      action: 'recover-chat',
+    });
+  }
+  unresponsiveTimer = setTimeout(() => {
+    if (!rendererUnresponsive || settings.streamRecoveryAlerts === false) return;
+    activityWindow?.showToast('ChatGPT is still not responding. Reload the current chat to retrieve any answer completed on the server.', {
+      type: 'error',
+      duration: 0,
+      actionLabel: 'Recover current chat',
+      action: 'recover-chat',
+    });
+  }, UNRESPONSIVE_GRACE_MS);
+  unresponsiveTimer.unref?.();
+}
+
+async function recoverCurrentChat() {
+  if (!appView || appView.webContents.isDestroyed()) return false;
+  const currentUrl = appView.webContents.getURL() || APP_URL;
+  clearUnresponsiveState();
+  activeLongResponseRequests.clear();
+  refreshStreamPowerProtection();
+  activityWindow?.dismissToast();
+  console.info(`[ChatDesk] Recovering current chat: ${sanitizeUrlForLog(currentUrl)}`);
+  await loadApp(currentUrl);
+  return true;
 }
 
 function clearLoadTimers() {
@@ -435,7 +678,9 @@ function scheduleReveal() {
 }
 
 async function loadApp(url = APP_URL) {
+  if (!appView || appView.webContents.isDestroyed()) createAppView();
   if (!appView || appView.webContents.isDestroyed()) return;
+  startupViewLoaded = true;
   clearLoadTimers();
   mainFrameLoadFailed = false;
   appRevealed = false;
@@ -452,14 +697,14 @@ async function loadApp(url = APP_URL) {
   }
 }
 
-function recordCrash(details) {
+async function recordCrash(details) {
   const record = {
     at: new Date().toISOString(),
     reason: details?.reason || details?.type || 'unknown',
     exitCode: details?.exitCode ?? '',
     profile: activeProfile()?.name || 'Unknown',
   };
-  try { fs.writeFileSync(crashStatePath, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 }); } catch {}
+  try { await fs.promises.writeFile(crashStatePath, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 }); } catch {}
   return record;
 }
 
@@ -467,14 +712,23 @@ function showCrash(details) {
   clearLoadTimers();
   mainFrameLoadFailed = true;
   appRevealed = false;
-  const record = recordCrash(details);
+  const record = {
+    at: new Date().toISOString(),
+    reason: details?.reason || details?.type || 'unknown',
+    exitCode: details?.exitCode ?? '',
+    profile: activeProfile()?.name || 'Unknown',
+  };
+  void recordCrash(details);
   lastFailure = { type: 'crash', ...record };
   console.error('[ChatDesk] Renderer failure:', record);
   setChromeMode('crash', record);
 }
 
 function destroyAppView() {
+  findController?.close();
+  clearUnresponsiveState();
   if (!appView) return;
+  clearLongResponseRequestsForWebContents(appView.webContents.id);
   try { mainWindow?.contentView.removeChildView(appView); } catch {}
   try { if (!appView.webContents.isDestroyed()) appView.webContents.close(); } catch {}
   appView = null;
@@ -488,6 +742,16 @@ function createAppView() {
   appView.setBackgroundColor('#202123');
   appView.setVisible(false);
   secureWebContents(appView.webContents);
+  installStreamStabilityMonitor(appView.webContents.session);
+  if (settings.nativeContextMenu !== false) installNativeContextMenu(appView.webContents, contextMenuOptions());
+  appView.webContents.on('before-input-event', (event, input) => {
+    const modifier = input.control || input.meta;
+    if (modifier && input.key.toLowerCase() === 'f') { event.preventDefault(); findController?.open(); }
+    else if (input.alt && input.key === 'Left') { event.preventDefault(); if (appView.webContents.navigationHistory.canGoBack()) appView.webContents.navigationHistory.goBack(); }
+    else if (input.alt && input.key === 'Right') { event.preventDefault(); if (appView.webContents.navigationHistory.canGoForward()) appView.webContents.navigationHistory.goForward(); }
+    else if (input.key === 'F11') { event.preventDefault(); setFocusMode(!focusMode); }
+    else if (input.key === 'Escape' && focusMode) { event.preventDefault(); setFocusMode(false); }
+  });
   mainWindow.contentView.addChildView(appView);
   layoutAppView();
   applyWebSettings();
@@ -508,8 +772,9 @@ function createAppView() {
     if (!isMainFrame || errorCode === -3) return;
     showOffline({ errorCode, errorDescription, validatedURL });
   });
-  appView.webContents.on('render-process-gone', (_event, details) => showCrash(details));
-  appView.webContents.on('unresponsive', () => showCrash({ reason: 'unresponsive' }));
+  appView.webContents.on('render-process-gone', (_event, details) => { clearUnresponsiveState(); showCrash(details); });
+  appView.webContents.on('unresponsive', handleRendererUnresponsive);
+  appView.webContents.on('responsive', () => clearUnresponsiveState({ recovered: true }));
 }
 
 async function switchProfile(id) {
@@ -655,10 +920,14 @@ function createApplicationMenu() {
       submenu: [
         { label: t('newChat'), accelerator: 'CommandOrControl+N', click: () => void loadApp(APP_URL) },
         { label: t('reload'), accelerator: 'CommandOrControl+R', click: () => appView?.webContents.reload() },
+        { label: 'Recover Current Chat', accelerator: 'CommandOrControl+Shift+R', click: () => void recoverCurrentChat() },
+        { label: 'Find in Conversation…', accelerator: 'CommandOrControl+F', click: () => findController?.open() },
+        { label: 'Back', accelerator: 'Alt+Left', enabled: Boolean(appView?.webContents.navigationHistory.canGoBack()), click: () => appView?.webContents.navigationHistory.goBack() },
+        { label: 'Forward', accelerator: 'Alt+Right', enabled: Boolean(appView?.webContents.navigationHistory.canGoForward()), click: () => appView?.webContents.navigationHistory.goForward() },
         { label: t('downloads'), accelerator: 'CommandOrControl+J', click: () => showPanel('downloads') },
         { label: 'Share Files…', click: async () => {
           const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile', 'multiSelections'] });
-          if (!result.canceled) { stageSharedFiles(result.filePaths); showPanel('share'); }
+          if (!result.canceled) { const items = await stageSharedFiles(result.filePaths); if (items.length) showPanel('share'); }
         } },
         { label: 'Open Profile in New Window', submenu: profileWindowSubmenu },
         { type: 'separator' },
@@ -679,6 +948,7 @@ function createApplicationMenu() {
         { label: 'Dock Compact Left', enabled: compactMode, click: () => setCompactMode(true, 'left') },
         { label: 'Dock Compact Right', enabled: compactMode, click: () => setCompactMode(true, 'right') },
         { type: 'separator' },
+        { label: focusMode ? 'Exit Focus Mode' : 'Focus Mode', accelerator: 'F11', click: () => setFocusMode(!focusMode) },
         { role: 'togglefullscreen' },
         { type: 'separator' },
         { label: t('alwaysOnTop'), type: 'checkbox', checked: settings.alwaysOnTop, click: (item) => updateSettings({ alwaysOnTop: item.checked }) },
@@ -785,6 +1055,7 @@ async function runUiSmokeTest() {
 
 function createMainWindow() {
   const state = windowStateStore.read(screen.getAllDisplays());
+  const startInTray = settings.startupMode === 'tray' && !SAFE_MODE && !UI_SMOKE_TEST;
   mainWindow = new BrowserWindow({
     ...state.bounds,
     minWidth: 800,
@@ -808,8 +1079,15 @@ function createMainWindow() {
   mainWindow.webContents.on('console-message', (_event, details) => { if (details.level === 'error') console.error(`[ChatDesk] Shell renderer: ${details.message}`); });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
+  if (settings.nativeContextMenu !== false) installNativeContextMenu(mainWindow.webContents, contextMenuOptions(() => mainWindow));
 
-  createAppView();
+  findController = new FindController({
+    htmlPath: findPath, preloadPath: findPreloadPath, iconPath,
+    getTarget: () => appView?.webContents || null,
+    getParent: () => mainWindow,
+  });
+
+  if (!startInTray) createAppView();
   activityWindow = new ActivityWindow({
     parent: mainWindow,
     htmlPath: activityPath,
@@ -835,22 +1113,25 @@ function createMainWindow() {
     }
     quitting = true;
   });
-  mainWindow.on('closed', () => { activityWindow?.destroy(); activityWindow = null; destroyAppView(); mainWindow = null; });
+  mainWindow.on('closed', () => { findController?.close(); findController = null; activityWindow?.destroy(); activityWindow = null; destroyAppView(); mainWindow = null; });
 
   mainWindow.webContents.once('did-finish-load', () => {
     applyTheme();
     applyWindowSettings();
     sendToShell('settings:changed', publicSettings());
     sendToShell('profiles:changed', profileStore.getState());
-    mainWindow.show();
-    if (state.maximized) mainWindow.maximize();
+    const shouldShowAtStartup = !startInTray || !settings.onboardingComplete;
+    if (shouldShowAtStartup) mainWindow.show();
+    if (shouldShowAtStartup && state.maximized) mainWindow.maximize();
     updateWindowIdentity();
     if (UI_SMOKE_TEST) {
       void runUiSmokeTest();
       return;
     }
     if (!settings.onboardingComplete && !SAFE_MODE) setChromeMode('onboarding');
-    else void loadApp();
+    else if (!startInTray) {
+      void loadApp().then(() => { if (settings.startupMode === 'compact') setCompactMode(true, settings.compactSide); });
+    }
     updateDownloadIndicators();
     handleCommandLine(process.argv);
     scheduleAutomaticUpdateCheck();
@@ -922,7 +1203,43 @@ function diagnosticsData() {
     protocol: protocolRegistered ? 'chatdesk:// registered' : 'Not registered or source mode',
     openProfileWindows: profileWindowManager?.listOpen().join(', ') || 'None',
     clipboardHistory: settings.clipboardHistoryEnabled ? `Enabled (${captureStore?.list().length || 0} items; ${captureStore?.protection || 'not initialized'})` : 'Disabled',
+    longResponseProtection: settings.keepLongResponsesActive === false ? 'Disabled' : 'Enabled',
+    backgroundThrottling: appView?.webContents.getBackgroundThrottling() ? 'Enabled' : 'Disabled for long responses',
+    rendererState: rendererUnresponsive ? 'Temporarily unresponsive' : 'Responsive',
+    activeLongResponseRequests: activeLongResponseRequests.size,
+    streamPowerProtection: streamPowerBlockerId !== null && powerSaveBlocker.isStarted(streamPowerBlockerId) ? 'Active' : 'Idle',
+    lastStreamError: lastStreamError ? `${lastStreamError.at} — ${lastStreamError.error} — ${lastStreamError.resourceType}` : 'None recorded',
   };
+}
+
+async function performanceData() {
+  const profileStates = profileWindowManager?.listWindowStates() || [];
+  const windows = [mainWindow, ...profileStates.filter((item) => item.visible)];
+  const hiddenWindows = profileStates.filter((item) => !item.visible || item.minimized);
+  return collectPerformanceReport({
+    targetSession: appView?.webContents.session || session.fromPartition(activePartition()),
+    startupStartedAt: APP_START_AT,
+    windows,
+    hiddenWindows,
+    memorySaverMinutes: settings.memorySaverMinutes,
+  });
+}
+
+async function cacheData() {
+  const targetSession = appView?.webContents.session || session.fromPartition(activePartition());
+  let size = 0;
+  try { size = await targetSession.getCacheSize(); } catch {}
+  return { bytes: size, profile: activeProfile()?.name || 'Unknown' };
+}
+
+async function clearCacheKind(kind = 'http') {
+  const targetSession = appView?.webContents.session || session.fromPartition(activePartition());
+  if (kind === 'code') await targetSession.clearCodeCaches({});
+  else if (kind === 'session') {
+    await targetSession.clearStorageData();
+    if (appView) await loadApp();
+  } else await targetSession.clearCache();
+  return cacheData();
 }
 
 function publicSettings() {
@@ -935,12 +1252,14 @@ function publicSettings() {
     resolvedLanguage: resolvedLanguage(),
     compactMode,
     openProfileWindows: profileWindowManager?.listOpen() ?? [],
+    resolvedMotionMode: resolvedMotionMode(),
+    focusMode,
   };
 }
 
 function updateSettings(patch) {
   const previous = settings;
-  const candidate = sanitizeSettings({ ...settings, ...patch });
+  const candidate = sanitizeSettings({ ...settings, ...patch, ...(patch.motionMode ? { animations: patch.motionMode !== 'off' } : {}) });
   if (!SAFE_MODE && (previous.mainShortcut !== candidate.mainShortcut || previous.quickChatShortcut !== candidate.quickChatShortcut || previous.commandPaletteShortcut !== candidate.commandPaletteShortcut)) {
     const old = settings;
     settings = candidate;
@@ -957,6 +1276,7 @@ function updateSettings(patch) {
   applyTheme();
   applyWindowSettings();
   applyWebSettings();
+  profileWindowManager?.applySettings();
   applyAutostart();
   activityWindow?.updateSettings();
   updateWindowIdentity();
@@ -987,7 +1307,7 @@ function scheduleAutomaticUpdateCheck() {
   if (SAFE_MODE || UI_SMOKE_TEST || settings.autoCheckUpdates === false) return;
   const last = Date.parse(settings.lastUpdateCheckAt || '');
   const elapsed = Number.isFinite(last) ? Date.now() - last : UPDATE_CHECK_INTERVAL_MS;
-  const delay = elapsed >= UPDATE_CHECK_INTERVAL_MS ? 10_000 : Math.max(60_000, UPDATE_CHECK_INTERVAL_MS - elapsed);
+  const delay = elapsed >= UPDATE_CHECK_INTERVAL_MS ? UPDATE_STARTUP_DELAY_MS : Math.max(60_000, UPDATE_CHECK_INTERVAL_MS - elapsed);
   automaticUpdateTimer = setTimeout(async () => {
     try { await performUpdateCheck({ automatic: true }); }
     catch (error) { console.warn('[ChatDesk] Automatic update check failed:', error.message); }
@@ -1004,6 +1324,9 @@ function commandCatalog() {
     ['reload', 'Reload ChatGPT', 'Reload the current ChatGPT page', 'Chat', 'Ctrl+R', '↻'],
     ['quick-chat', 'Quick Capture', 'Capture selection or clipboard and prepare a prompt', 'Capture', settings.quickChatShortcut, '✦'],
     ['compact', compactMode ? 'Exit Compact Mode' : 'Compact Mode', 'Dock a narrow always-on-top ChatDesk window', 'Window', 'Ctrl+Shift+C', '▯'],
+    ['find', 'Find in Conversation', 'Search the current ChatGPT conversation', 'Chat', 'Ctrl+F', '⌕'],
+    ['focus', focusMode ? 'Exit Focus Mode' : 'Focus Mode', 'Hide local chrome and distractions', 'Window', 'F11', '◉'],
+    ['performance', 'Performance Monitor', 'Inspect process memory, CPU and cache use', 'Support', '', '⌁'],
     ['settings', 'Settings', 'Open ChatDesk settings', 'System', 'Ctrl+,', '⚙'],
     ['downloads', 'Downloads', 'View local download activity', 'System', 'Ctrl+J', '↓'],
     ['prompts', 'Prompt Library', 'Manage reusable local prompt templates', 'Power Tools', '', '✎'],
@@ -1056,6 +1379,9 @@ async function runCommand(payload = {}) {
   if (id === 'reload') { closePanel(); appView?.webContents.reload(); return true; }
   if (id === 'quick-chat') { closePanel(); toggleQuickChat({ forceShow: true }); return true; }
   if (id === 'compact') { closePanel(); return setCompactMode(!compactMode); }
+  if (id === 'find') { closePanel(); return findController?.open() || false; }
+  if (id === 'focus') { closePanel(); return setFocusMode(!focusMode); }
+  if (id === 'performance') { showPanel('diagnostics', { focus: 'performance' }); return true; }
   if (['settings', 'downloads', 'diagnostics', 'about', 'prompts', 'workspaces', 'captures', 'logs', 'health', 'share', 'report'].includes(id)) { showPanel(id); return true; }
   if (id === 'check-updates') { showPanel('about', { checkUpdates: true }); return true; }
   if (id === 'activity') { closePanel(); previewActivityCenter(); return true; }
@@ -1072,7 +1398,7 @@ function restartApplication(safeMode = false) {
 }
 
 function isTrustedSender(event) {
-  return event.sender === mainWindow?.webContents || event.sender === quickChatWindow?.webContents || activityWindow?.isSender(event.sender);
+  return event.sender === mainWindow?.webContents || event.sender === quickChatWindow?.webContents || activityWindow?.isSender(event.sender) || findController?.isSender(event.sender);
 }
 
 function registerIpc() {
@@ -1090,14 +1416,14 @@ function registerIpc() {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const result = await dialog.showSaveDialog(mainWindow, { defaultPath: 'chatdesk-settings.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
-    fs.writeFileSync(result.filePath, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
+    await fs.promises.writeFile(result.filePath, `${JSON.stringify(settings, null, 2)}\n`, { mode: 0o600 });
     return true;
   });
   ipcMain.handle('settings:import', async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePaths[0]) return publicSettings();
-    const parsed = JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'));
+    const parsed = JSON.parse(await fs.promises.readFile(result.filePaths[0], 'utf8'));
     return updateSettings(parsed);
   });
   ipcMain.handle('settings:factory-reset', async (event) => {
@@ -1139,6 +1465,12 @@ function registerIpc() {
   ipcMain.handle('download:action', (event, payload) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return downloadManager.action(payload?.id, payload?.action); });
   ipcMain.handle('diagnostics:get', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); const data = diagnosticsData(); return { ...data, text: formatDiagnostics(data) }; });
   ipcMain.handle('diagnostics:copy', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return writeClipboardText(formatDiagnostics(diagnosticsData())); });
+  ipcMain.handle('performance:get', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return performanceData(); });
+  ipcMain.handle('performance:copy', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); writeClipboardText(formatPerformanceReport(await performanceData())); return true; });
+  ipcMain.handle('cache:get', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return cacheData(); });
+  ipcMain.handle('cache:clear', async (event, kind) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return clearCacheKind(kind); });
+  ipcMain.handle('focus:get', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return { enabled: focusMode }; });
+  ipcMain.handle('focus:toggle', (event, enabled) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return setFocusMode(enabled === undefined ? !focusMode : enabled === true); });
   ipcMain.handle('clipboard:test', (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const sample = `ChatDesk clipboard test — ${new Date().toISOString()}`;
@@ -1186,14 +1518,14 @@ function registerIpc() {
     const item = captureStore.list().find((entry) => entry.id === id); if (!item) throw new Error('Capture not found.'); writeClipboardText(item.text); return true;
   });
 
-  ipcMain.handle('logs:list', (event, options) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return listLogLines(options || {}); });
-  ipcMain.handle('logs:copy', (event, options) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); writeClipboardText(listLogLines(options || {}).join('\n')); return true; });
+  ipcMain.handle('logs:list', async (event, options) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return listLogLines(options || {}); });
+  ipcMain.handle('logs:copy', async (event, options) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); writeClipboardText((await listLogLines(options || {})).join('\n')); return true; });
   ipcMain.handle('logs:export', async (event, options) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const result = await dialog.showSaveDialog(mainWindow, { defaultPath: 'chatdesk-sanitized.log', filters: [{ name: 'Log file', extensions: ['log', 'txt'] }] });
-    if (result.canceled || !result.filePath) return false; fs.writeFileSync(result.filePath, `${listLogLines(options || {}).join('\n')}\n`, { mode: 0o600 }); return true;
+    if (result.canceled || !result.filePath) return false; await fs.promises.writeFile(result.filePath, `${(await listLogLines(options || {})).join('\n')}\n`, { mode: 0o600 }); return true;
   });
-  ipcMain.handle('logs:clear', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); fs.mkdirSync(logDirectory, { recursive: true }); fs.writeFileSync(logPath, '', { mode: 0o600 }); return true; });
+  ipcMain.handle('logs:clear', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); await fs.promises.mkdir(logDirectory, { recursive: true }); await fs.promises.writeFile(logPath, '', { mode: 0o600 }); return true; });
 
   ipcMain.handle('health:run', async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
@@ -1202,19 +1534,19 @@ function registerIpc() {
   ipcMain.handle('issue:prepare', async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const health = await runHealthChecks({ userDataPath, sandboxPath, shortcutStatus, protocolRegistered, profilePartition: activePartition() });
-    return formatIssueReport({ diagnostics: diagnosticsData(), health, logs: listLogLines({ limit: 120 }) });
+    return formatIssueReport({ diagnostics: diagnosticsData(), health, logs: await listLogLines({ limit: 120 }) });
   });
-  ipcMain.handle('issue:copy', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); const health = await runHealthChecks({ userDataPath, sandboxPath, shortcutStatus, protocolRegistered, profilePartition: activePartition() }); writeClipboardText(formatIssueReport({ diagnostics: diagnosticsData(), health, logs: listLogLines({ limit: 120 }) })); return true; });
+  ipcMain.handle('issue:copy', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); const health = await runHealthChecks({ userDataPath, sandboxPath, shortcutStatus, protocolRegistered, profilePartition: activePartition() }); writeClipboardText(formatIssueReport({ diagnostics: diagnosticsData(), health, logs: await listLogLines({ limit: 120 }) })); return true; });
   ipcMain.handle('issue:save', async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.');
     const health = await runHealthChecks({ userDataPath, sandboxPath, shortcutStatus, protocolRegistered, profilePartition: activePartition() });
-    const report = formatIssueReport({ diagnostics: diagnosticsData(), health, logs: listLogLines({ limit: 120 }) });
+    const report = formatIssueReport({ diagnostics: diagnosticsData(), health, logs: await listLogLines({ limit: 120 }) });
     const result = await dialog.showSaveDialog(mainWindow, { defaultPath: 'chatdesk-issue-report.md', filters: [{ name: 'Markdown', extensions: ['md'] }] });
-    if (result.canceled || !result.filePath) return false; fs.writeFileSync(result.filePath, `${report}\n`, { mode: 0o600 }); return true;
+    if (result.canceled || !result.filePath) return false; await fs.promises.writeFile(result.filePath, `${report}\n`, { mode: 0o600 }); return true;
   });
   ipcMain.handle('issue:open', async (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); await shell.openExternal('https://github.com/MilMit/chatdesk-linux/issues/new?template=bug_report.yml'); return true; });
 
-  ipcMain.handle('share:stage', (event, filePaths) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return stageSharedFiles(filePaths); });
+  ipcMain.handle('share:stage', async (event, filePaths) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return stageSharedFiles(filePaths); });
   ipcMain.handle('share:list', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); return serializeShareQueue(); });
   ipcMain.handle('share:remove', (event, id) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); shareQueue.delete(id); return serializeShareQueue(); });
   ipcMain.handle('share:clear', (event) => { if (!isTrustedSender(event)) throw new Error('Untrusted IPC sender.'); shareQueue.clear(); return []; });
@@ -1240,12 +1572,12 @@ function registerIpc() {
     return {
       language: resolvedLanguage(),
       requestedProfileId: requestedQuickProfileId,
-      clipboard: clipboardText,
-      selection,
+      clipboard: requestedQuickText || clipboardText,
+      selection: requestedQuickText || selection,
       profiles: { ...profileState, profiles: profileState.profiles.map((profile) => ({ ...profile, glyph: profileGlyph(profile) })) },
       prompts: promptStore.list().map((prompt) => ({
         ...prompt,
-        preview: expandPromptTemplate(prompt.template, { clipboard: clipboardText, selection: selection || clipboardText, date: new Date().toLocaleDateString(), profile: activeProfile()?.name || '' }),
+        preview: expandPromptTemplate(prompt.template, { clipboard: requestedQuickText || clipboardText, selection: requestedQuickText || selection || clipboardText, date: new Date().toLocaleDateString(), profile: activeProfile()?.name || '' }),
       })),
     };
   });
@@ -1262,6 +1594,7 @@ function registerIpc() {
     maybeStoreCapture(normalized, payload.promptId ? 'prompt' : 'manual', profileId);
     quickChatWindow?.hide();
     requestedQuickProfileId = '';
+    requestedQuickText = '';
     if (payload.destination === 'window') openProfileWindow(profileId, { newChat: true });
     else {
       if (profileId && profileId !== activeProfile()?.id) await switchProfile(profileId);
@@ -1291,6 +1624,7 @@ function registerIpc() {
     if (payload.type === 'diagnostics') showPanel('diagnostics');
     if (payload.type === 'toast-action' && payload.action === 'downloads') showPanel('downloads');
     if (payload.type === 'toast-action' && payload.action === 'update') showPanel('about', { checkUpdates: true });
+    if (payload.type === 'toast-action' && payload.action === 'recover-chat') void recoverCurrentChat();
   });
 }
 
@@ -1332,8 +1666,8 @@ async function handleDeepLink(value) {
 function handleCommandLine(argv = []) {
   const deepLink = findDeepLink(argv);
   if (deepLink) void handleDeepLink(deepLink);
-  const sharedFiles = collectSharedFiles(argv.slice(1)).filter((filePath) => fs.existsSync(filePath));
-  if (sharedFiles.length) { stageSharedFiles(sharedFiles); showPanel('share'); }
+  const sharedFiles = collectSharedFiles(argv.slice(1));
+  if (sharedFiles.length) { void stageSharedFiles(sharedFiles).then((items) => { if (items.length) showPanel('share'); }); }
   if (argv.includes('--new-chat')) void loadApp(APP_URL);
   if (argv.includes('--quick-chat')) toggleQuickChat({ forceShow: true });
   if (argv.includes('--downloads')) showPanel('downloads');
@@ -1354,6 +1688,7 @@ else {
   app.whenReady().then(() => {
     console.info(`[ChatDesk] Starting ${app.getVersion()}${SAFE_MODE ? ' in safe mode' : ''}`);
     nativeTheme.themeSource = settings.theme;
+    if (settings.startupMode === 'personal' && profileStore.get('personal')) profileStore.setActive('personal');
     setExternalLinksEnabled(settings.externalLinks);
     downloadManager = new DownloadManager({
       historyPath: path.join(userDataPath, 'download-history.json'),
@@ -1368,6 +1703,9 @@ else {
       profileStore,
       downloadManager,
       getSettings: () => settings,
+      contextMenuOptions: () => contextMenuOptions(),
+      prepareSession: installStreamStabilityMonitor,
+      onWebContentsDestroyed: clearLongResponseRequestsForWebContents,
     });
     protocolRegistered = registerDeepLinkProtocol();
     captureStore = new CaptureStore(path.join(userDataPath, 'captures.json'), {
@@ -1376,6 +1714,7 @@ else {
     });
     registerIpc();
     createMainWindow();
+    findController?.registerIpc(isTrustedSender);
     createTray();
     applyAutostart();
     registerShortcuts();
@@ -1384,7 +1723,21 @@ else {
   }).catch((error) => { console.error('Application startup failed:', error); app.quit(); });
 
   app.on('activate', focusMainWindow);
-  app.on('before-quit', () => { quitting = true; clearTimeout(automaticUpdateTimer); profileWindowManager?.closeAll(); });
+  app.on('before-quit', (event) => {
+    quitting = true;
+    clearTimeout(automaticUpdateTimer);
+    clearUnresponsiveState();
+    activeLongResponseRequests.clear();
+    stopStreamPowerProtection();
+    profileWindowManager?.closeAll();
+    if (persistenceFlushed || flushingQuit) return;
+    event.preventDefault();
+    flushingQuit = true;
+    void flushPersistentState().finally(() => {
+      persistenceFlushed = true;
+      app.quit();
+    });
+  });
   app.on('will-quit', () => globalShortcut.unregisterAll());
   app.on('window-all-closed', () => { if (quitting || SAFE_MODE || !settings.minimizeToTray) app.quit(); });
   process.on('uncaughtException', (error) => console.error('Uncaught exception:', error));

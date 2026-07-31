@@ -23,13 +23,13 @@ function protectedIo(codec) {
         return structuredClone(fallback);
       }
     },
-    write(filePath, value) {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    async write(filePath, value) {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       const temporaryPath = `${filePath}.tmp`;
       const encrypted = codec.encrypt(JSON.stringify(value));
       const envelope = { format: PROTECTED_FORMAT, backend: codec.name, data: Buffer.from(encrypted).toString('base64') };
-      fs.writeFileSync(temporaryPath, `${JSON.stringify(envelope)}\n`, { mode: 0o600 });
-      fs.renameSync(temporaryPath, filePath);
+      await fs.promises.writeFile(temporaryPath, `${JSON.stringify(envelope)}\n`, { mode: 0o600 });
+      await fs.promises.rename(temporaryPath, filePath);
     },
   };
 }
@@ -115,4 +115,6 @@ export class CaptureStore {
     this.store.replace(DEFAULT_STATE);
     return [];
   }
+
+  async flush() { await this.store.flush(); }
 }

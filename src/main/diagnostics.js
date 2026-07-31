@@ -21,6 +21,12 @@ export function formatDiagnostics(data) {
     ['Session', data.session],
     ['ChatGPT URL', data.url],
     ['Hardware acceleration', data.hardwareAcceleration ? 'Enabled' : 'Disabled'],
+    ['Long-task protection', data.longResponseProtection || 'Unknown'],
+    ['Background throttling', data.backgroundThrottling || 'Unknown'],
+    ['Renderer state', data.rendererState || 'Unknown'],
+    ['Active stream requests', String(data.activeLongResponseRequests ?? 0)],
+    ['Suspension protection', data.streamPowerProtection || 'Unknown'],
+    ['Last stream error', data.lastStreamError || 'None recorded'],
     ['Log file', data.logFile],
     ['Last crash', data.lastCrash || 'None recorded'],
   ];

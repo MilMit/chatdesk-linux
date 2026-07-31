@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeJsonFile } from './atomic-json-store.js';
 
 export const PROFILE_COLORS = Object.freeze(['blue', 'violet', 'emerald', 'amber', 'rose', 'cyan']);
 export const PROFILE_ICONS = Object.freeze(['person', 'briefcase', 'flask', 'star', 'code', 'shield']);
@@ -44,7 +45,7 @@ export function partitionForProfile(id) {
 }
 
 export class ProfileStore {
-  constructor(filePath) { this.filePath = filePath; this.state = this.#read(); }
+  constructor(filePath) { this.filePath = filePath; this.state = this.#read(); this.writeQueue = Promise.resolve(); this.lastWriteError = null; }
   #read() {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
@@ -54,11 +55,12 @@ export class ProfileStore {
     } catch { return { profiles: DEFAULT_PROFILES.map((item) => ({ ...item })), activeId: 'personal' }; }
   }
   #write() {
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    const temp = `${this.filePath}.tmp`;
-    fs.writeFileSync(temp, `${JSON.stringify(this.state, null, 2)}\n`, { mode: 0o600 });
-    fs.renameSync(temp, this.filePath);
+    const snapshot = structuredClone(this.state);
+    this.writeQueue = this.writeQueue
+      .then(() => writeJsonFile(this.filePath, snapshot))
+      .catch((error) => { this.lastWriteError = error; console.warn('[ChatDesk] Failed to save profiles:', error.message); });
   }
+  async flush() { await this.writeQueue; if (this.lastWriteError) throw this.lastWriteError; }
   getState() { return structuredClone(this.state); }
   getActive() { return this.state.profiles.find((item) => item.id === this.state.activeId); }
   get(id) { return this.state.profiles.find((item) => item.id === id); }

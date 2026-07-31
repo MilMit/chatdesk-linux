@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { writeJsonFile } from './atomic-json-store.js';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   language: 'system',
@@ -20,6 +21,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   downloadPath: '',
   alwaysOnTop: false,
   animations: true,
+  motionMode: 'system',
+  memorySaverMinutes: 10,
+  startupMode: 'last',
+  focusAlwaysOnTop: false,
+  nativeContextMenu: true,
+  keepLongResponsesActive: true,
+  streamRecoveryAlerts: true,
   autoHideMenuBar: false,
   activityPopups: true,
   connectionActivity: true,
@@ -35,6 +43,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
 const ALLOWED_THEMES = new Set(['system', 'light', 'dark']);
 const ALLOWED_LANGUAGES = new Set(['system', 'en', 'fa']);
 const ALLOWED_COMPACT_SIDES = new Set(['left', 'right']);
+const ALLOWED_MOTION_MODES = new Set(['system', 'full', 'reduced', 'off']);
+const ALLOWED_STARTUP_MODES = new Set(['last', 'personal', 'compact', 'tray']);
+const ALLOWED_MEMORY_SAVER_MINUTES = new Set([0, 10, 30]);
 
 function clampZoom(value) {
   const number = Number(value);
@@ -85,7 +96,14 @@ export function sanitizeSettings(input = {}) {
     commandPaletteShortcut: stringOrDefault(input.commandPaletteShortcut, DEFAULT_SETTINGS.commandPaletteShortcut),
     downloadPath: typeof input.downloadPath === 'string' ? input.downloadPath : '',
     alwaysOnTop: input.alwaysOnTop === true,
-    animations: input.animations !== false,
+    animations: input.motionMode === 'off' ? false : input.animations !== false,
+    motionMode: ALLOWED_MOTION_MODES.has(input.motionMode) ? input.motionMode : (input.animations === false ? 'off' : DEFAULT_SETTINGS.motionMode),
+    memorySaverMinutes: ALLOWED_MEMORY_SAVER_MINUTES.has(Number(input.memorySaverMinutes)) ? Number(input.memorySaverMinutes) : DEFAULT_SETTINGS.memorySaverMinutes,
+    startupMode: ALLOWED_STARTUP_MODES.has(input.startupMode) ? input.startupMode : DEFAULT_SETTINGS.startupMode,
+    focusAlwaysOnTop: input.focusAlwaysOnTop === true,
+    nativeContextMenu: input.nativeContextMenu !== false,
+    keepLongResponsesActive: input.keepLongResponsesActive !== false,
+    streamRecoveryAlerts: input.streamRecoveryAlerts !== false,
     autoHideMenuBar: input.autoHideMenuBar === true,
     activityPopups: input.activityPopups !== false,
     connectionActivity: input.connectionActivity !== false,
@@ -100,7 +118,7 @@ export function sanitizeSettings(input = {}) {
 }
 
 export class SettingsStore {
-  constructor(filePath) { this.filePath = filePath; this.settings = this.#read(); }
+  constructor(filePath) { this.filePath = filePath; this.settings = this.#read(); this.writeQueue = Promise.resolve(); this.lastWriteError = null; }
   #read() {
     try { return sanitizeSettings(JSON.parse(fs.readFileSync(this.filePath, 'utf8'))); }
     catch { return { ...DEFAULT_SETTINGS }; }
@@ -110,9 +128,10 @@ export class SettingsStore {
   replace(next) { this.settings = sanitizeSettings(next); this.#write(); return this.get(); }
   reset() { this.settings = { ...DEFAULT_SETTINGS }; this.#write(); return this.get(); }
   #write() {
-    fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    const tempPath = `${this.filePath}.tmp`;
-    fs.writeFileSync(tempPath, `${JSON.stringify(this.settings, null, 2)}\n`, { mode: 0o600 });
-    fs.renameSync(tempPath, this.filePath);
+    const snapshot = structuredClone(this.settings);
+    this.writeQueue = this.writeQueue
+      .then(() => writeJsonFile(this.filePath, snapshot))
+      .catch((error) => { this.lastWriteError = error; console.warn('[ChatDesk] Failed to save settings:', error.message); });
   }
+  async flush() { await this.writeQueue; if (this.lastWriteError) throw this.lastWriteError; }
 }

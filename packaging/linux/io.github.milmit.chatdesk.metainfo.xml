@@ -40,6 +40,16 @@
   </provides>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.6.1" date="2026-07-31">
+      <description>
+        <p>Improved long Thinking response stability, background streaming, transient renderer recovery, and stream diagnostics.</p>
+      </description>
+    </release>
+    <release version="0.6.0" date="2026-07-31">
+      <description>
+        <p>Added native context menus, Find in Conversation, Focus Mode, Memory Saver, performance diagnostics, and release bundling.</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-07-28">
       <description>
         <p>Improved Debian and AppStream metadata for Linux software centers.</p>

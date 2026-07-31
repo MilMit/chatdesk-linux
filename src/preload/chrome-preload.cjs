@@ -7,6 +7,7 @@ const INVOKE_CHANNELS = new Set([
   'profiles:get', 'profiles:add', 'profiles:update', 'profiles:switch', 'profiles:remove', 'profiles:open-window',
   'downloads:list', 'downloads:clear-history', 'download:action',
   'diagnostics:get', 'diagnostics:copy', 'diagnostics:open-logs', 'clipboard:test',
+  'performance:get', 'performance:copy', 'cache:get', 'cache:clear', 'focus:get', 'focus:toggle',
   'update:check', 'external:open', 'command:execute', 'command:list', 'command:favorite',
   'onboarding:complete', 'compact:get', 'compact:toggle', 'compact:dock',
   'workspaces:list', 'workspaces:save', 'workspaces:remove', 'workspaces:apply',
@@ -19,7 +20,7 @@ const INVOKE_CHANNELS = new Set([
 const SEND_CHANNELS = new Set(['ui:close', 'app:retry', 'app:reload', 'app:new-chat', 'app:restart', 'quick-chat:open']);
 const RECEIVE_CHANNELS = new Set([
   'ui:show', 'app:ready', 'app:offline', 'app:loading', 'theme:changed', 'settings:changed',
-  'profiles:changed', 'shortcuts:status', 'download:update', 'toast:show', 'power:changed',
+  'profiles:changed', 'shortcuts:status', 'download:update', 'toast:show', 'power:changed', 'focus:changed',
 ]);
 
 function requireAllowed(channel, allowed, operation) {

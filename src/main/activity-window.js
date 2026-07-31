@@ -100,7 +100,8 @@ export class ActivityWindow {
   #payload() {
     const settings = this.#settings();
     return {
-      animations: settings.animations !== false && !this.safeMode,
+      animations: settings.motionMode !== 'off' && settings.animations !== false && !this.safeMode,
+      motionMode: settings.motionMode || 'system',
       dark: this.getDark?.() !== false,
       language: this.getLanguage?.() || 'en',
       profile: this.getProfile?.() || null,

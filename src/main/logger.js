@@ -28,22 +28,27 @@ export class FileLogger {
       error: console.error.bind(console),
       log: console.log.bind(console),
     };
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    this.#rotate();
+    this.writeQueue = Promise.resolve();
+    this.ready = this.#prepare();
   }
 
-  #rotate() {
+  async #prepare() {
     try {
-      if (fs.statSync(this.filePath).size < MAX_LOG_SIZE) return;
+      await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
+      const stat = await fs.promises.stat(this.filePath).catch(() => null);
+      if (!stat || stat.size < MAX_LOG_SIZE) return;
       const oldPath = `${this.filePath}.1`;
-      try { fs.unlinkSync(oldPath); } catch {}
-      fs.renameSync(this.filePath, oldPath);
+      await fs.promises.rm(oldPath, { force: true });
+      await fs.promises.rename(this.filePath, oldPath);
     } catch {}
   }
 
   #write(level, args) {
     const line = `${new Date().toISOString()} [${level}] ${args.map(render).join(' ')}\n`;
-    try { fs.appendFileSync(this.filePath, line, { encoding: 'utf8', mode: 0o600 }); } catch {}
+    this.writeQueue = this.writeQueue
+      .then(() => this.ready)
+      .then(() => fs.promises.appendFile(this.filePath, line, { encoding: 'utf8', mode: 0o600 }))
+      .catch(() => {});
     const method = level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'info';
     this.original[method](...args);
   }
@@ -51,11 +56,14 @@ export class FileLogger {
   info(...args) { this.#write('INFO', args); }
   warn(...args) { this.#write('WARN', args); }
   error(...args) { this.#write('ERROR', args); }
+  log(...args) { this.#write('INFO', args); }
 
   installConsoleBridge() {
     console.info = (...args) => this.info(...args);
-    console.log = (...args) => this.info(...args);
     console.warn = (...args) => this.warn(...args);
     console.error = (...args) => this.error(...args);
+    console.log = (...args) => this.log(...args);
   }
+
+  async flush() { await this.writeQueue; }
 }

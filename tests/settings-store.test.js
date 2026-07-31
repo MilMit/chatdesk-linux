@@ -39,3 +39,29 @@ test('supports language, onboarding, daily update checks, and Command Palette se
   assert.equal(settings.lastUpdateCheckAt, '2026-07-28T00:00:00.000Z');
   assert.equal(settings.commandPaletteShortcut, 'CommandOrControl+Shift+K');
 });
+
+
+test('supports native interaction and performance preferences', () => {
+  const settings = sanitizeSettings({
+    motionMode: 'reduced',
+    memorySaverMinutes: 30,
+    startupMode: 'tray',
+    focusAlwaysOnTop: true,
+    nativeContextMenu: false,
+  });
+  assert.equal(settings.motionMode, 'reduced');
+  assert.equal(settings.memorySaverMinutes, 30);
+  assert.equal(settings.startupMode, 'tray');
+  assert.equal(settings.focusAlwaysOnTop, true);
+  assert.equal(settings.nativeContextMenu, false);
+});
+
+
+test('keeps long responses active and recovery alerts enabled by default', () => {
+  const defaults = sanitizeSettings({});
+  assert.equal(defaults.keepLongResponsesActive, true);
+  assert.equal(defaults.streamRecoveryAlerts, true);
+  const disabled = sanitizeSettings({ keepLongResponsesActive: false, streamRecoveryAlerts: false });
+  assert.equal(disabled.keepLongResponsesActive, false);
+  assert.equal(disabled.streamRecoveryAlerts, false);
+});

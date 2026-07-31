@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <link rel="stylesheet" href="styles.css">
+  <title>Find</title>
+</head>
+<body>
+  <div class="bar">
+    <input id="query" type="search" autocomplete="off" placeholder="Find in conversation…" aria-label="Find in conversation">
+    <span id="count">0 / 0</span>
+    <button id="previous" title="Previous">↑</button>
+    <button id="next" title="Next">↓</button>
+    <label title="Match case"><input id="matchCase" type="checkbox">Aa</label>
+    <button id="close" title="Close">×</button>
+  </div>
+  <script src="../../build/renderer/find.js"></script>
+</body>
+</html>

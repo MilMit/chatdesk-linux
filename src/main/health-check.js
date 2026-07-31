@@ -7,7 +7,7 @@ function result(id, label, status, detail) { return { id, label, status, detail 
 export async function runHealthChecks({ userDataPath, sandboxPath, shortcutStatus = {}, protocolRegistered = false, profilePartition = '' } = {}) {
   const checks = [];
   try {
-    const stat = fs.statSync(sandboxPath);
+    const stat = await fs.promises.stat(sandboxPath);
     const mode = stat.mode & 0o7777;
     const ownerOk = typeof stat.uid !== 'number' || stat.uid === 0;
     checks.push(result('sandbox', 'Chromium sandbox', mode === 0o4755 && ownerOk ? 'pass' : 'warn', `mode ${mode.toString(8)}${ownerOk ? '' : ', not owned by root'}`));
@@ -17,8 +17,8 @@ export async function runHealthChecks({ userDataPath, sandboxPath, shortcutStatu
 
   try {
     const probe = path.join(userDataPath, '.health-write-test');
-    fs.writeFileSync(probe, 'ok', { mode: 0o600 });
-    fs.unlinkSync(probe);
+    await fs.promises.writeFile(probe, 'ok', { mode: 0o600 });
+    await fs.promises.rm(probe, { force: true });
     checks.push(result('storage', 'Session storage', 'pass', 'user data directory is writable'));
   } catch (error) {
     checks.push(result('storage', 'Session storage', 'fail', error.message));

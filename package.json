@@ -1,9 +1,9 @@
 {
   "name": "chatdesk-linux",
-  "version": "0.5.1",
-  "description": "Unofficial ChatGPT desktop client for Linux with isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux integration.",
+  "version": "0.6.1",
+  "description": "Unofficial ChatGPT desktop client for Linux with stable long-response streaming, isolated profiles, native interactions, diagnostics, and Linux integration.",
   "type": "module",
-  "main": "src/main/index.js",
+  "main": "build/main/index.js",
   "author": {
     "name": "MilMit",
     "url": "https://github.com/MilMit"
@@ -21,19 +21,22 @@
     "node": ">=24"
   },
   "scripts": {
-    "start": "electron .",
+    "start": "npm run bundle && electron .",
     "test": "node --test",
     "check": "node scripts/check-syntax.js",
     "dist": "npm run dist:linux",
-    "dist:linux": "electron-builder --linux AppImage deb && node scripts/enrich-deb.js",
-    "dist:snap": "electron-builder --linux snap",
-    "test:ui": "xvfb-run -a electron . --ui-smoke-test",
+    "dist:linux": "npm run bundle && electron-builder --linux AppImage deb && node scripts/enrich-deb.js",
+    "dist:snap": "npm run bundle && electron-builder --linux snap",
+    "test:ui": "npm run bundle && xvfb-run -a electron . --ui-smoke-test",
     "sbom": "npm sbom --sbom-format spdx > dist/chatdesk-linux-sbom.spdx.json",
-    "dist:deb": "electron-builder --linux deb && node scripts/enrich-deb.js"
+    "dist:deb": "npm run bundle && electron-builder --linux deb && node scripts/enrich-deb.js",
+    "bundle": "node scripts/bundle.js",
+    "release:github": "bash scripts/publish-github.sh"
   },
   "devDependencies": {
     "electron": "43.2.0",
-    "electron-builder": "26.15.5"
+    "electron-builder": "26.15.5",
+    "esbuild": "0.28.1"
   },
   "build": {
     "appId": "io.github.milmit.chatdesk",
@@ -41,9 +44,11 @@
     "artifactName": "chatdesk-linux-${version}-${arch}.${ext}",
     "asar": true,
     "files": [
-      "src/**/*",
+      "build/**/*",
+      "src/**/*.html",
+      "src/**/*.css",
       "assets/**/*",
-      "scripts/**/*",
+      "scripts/enrich-deb.js",
       "package.json",
       "LICENSE",
       "NOTICE"
@@ -118,7 +123,7 @@
       },
       "syncDesktopName": true,
       "synopsis": "Unofficial ChatGPT desktop client for Linux",
-      "description": "ChatDesk Linux provides isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux desktop integration.",
+      "description": "ChatDesk Linux provides stable long-response handling, isolated profiles, native interactions, prompt tools, diagnostics, and Linux desktop integration.",
       "maintainer": "MilMit <MilMit@users.noreply.github.com>",
       "vendor": "MilMit"
     },
@@ -162,7 +167,7 @@
       "maintainer": "MilMit <MilMit@users.noreply.github.com>",
       "vendor": "MilMit",
       "synopsis": "Unofficial ChatGPT desktop client for Linux",
-      "description": "ChatDesk Linux provides isolated profiles, workspaces, quick capture, prompt tools, download management, diagnostics, and native Linux desktop integration."
+      "description": "ChatDesk Linux provides stable long-response handling, isolated profiles, native interactions, prompt tools, diagnostics, and Linux desktop integration."
     }
   },
   "keywords": [

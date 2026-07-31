@@ -89,6 +89,8 @@ export class PromptStore {
     return this.list();
   }
 
+  async flush() { await this.store.flush(); }
+
   reset() {
     this.store.reset();
     return this.list();
