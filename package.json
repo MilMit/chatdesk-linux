@@ -34,7 +34,7 @@
     "release:github": "bash scripts/publish-github.sh"
   },
   "devDependencies": {
-    "electron": "43.2.0",
+    "electron": "43.4.1",
     "electron-builder": "26.15.5",
     "esbuild": "0.28.1"
   },
