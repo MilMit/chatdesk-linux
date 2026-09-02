@@ -1,6 +1,6 @@
 # ChatDesk Linux
 
-**An unofficial ChatGPT desktop app for Linux**, built and maintained by **Milmit**.
+**An unofficial ChatGPT desktop app for Linux**, created by [Milad Dadgar](https://github.com/miladdadgar) and published under [MilMit](https://github.com/MilMit).
 
 ChatDesk Linux opens `https://chatgpt.com` in isolated Electron sessions and adds native Linux workflows around it. It does not inject custom JavaScript or CSS into ChatGPT and does not claim to be an official OpenAI client.
 
